@@ -1,0 +1,105 @@
+Category,Service,Price_IDR,Note
+Facial,Premium Facial,400000.0,
+Facial,Ever Glow Facial,450000.0,
+Facial,Oxy Glow Facial,500000.0,
+Facial,Hydra Facial,600000.0,
+Facial,Light Therapy Facial,650000.0,
+Facial,Gold Premium Facial,750000.0,
+Facial,Oxy Diamond Peel Facial,750000.0,
+RF,RF Face,600000.0,
+RF,RF Neck,400000.0,
+RF,RF Face & Neck,1000000.0,
+RF,RF Arm,600000.0,
+RF,RF Tight,750000.0,
+RF,RF Belly,750000.0,
+RF,RF Bust Breast,500000.0,
+RF,Eye Rejuve,400000.0,
+Laser,CO2-Scar + Salmon,1750000.0,
+Laser,CO2 Scar + Exosome,3500000.0,
+Laser,CO2-Rejuve,1500000.0,
+Laser,Laser Toning Collagen,1500000.0,
+Laser,Nd:YAG Melasma,1000000.0,
+Laser,Nd:YAG Laser Pigmentation,1000000.0,*
+Laser,Nd:YAG Tattoo Removal,1000000.0,*
+Laser,NDYAG Lip Brightening,400000.0,
+Laser,Cutting Laser,300000.0,*
+IPL,Rejuve & Bright,1000000.0,
+IPL,Oxy IPL Rejuve,1500000.0,
+IPL,HR Underarm,400000.0,
+IPL,HR Bikini Line,650000.0,
+IPL,HR Leg,900000.0,
+IPL,HR Arm Full,700000.0,
+IPL,HR Arm,500000.0,
+IPL,HR Upper Lip,200000.0,
+IPL,HR Facial Hair,600000.0,
+Peeling,Bright Peel Face,400000.0,
+Peeling,Bright Peel Neck,400000.0,
+Peeling,Bright Peel Arm,750000.0,
+Peeling,Bright Peel Bikini Line,400000.0,
+Peeling,Bright Peel Buttock,500000.0,
+Peeling,Bright Peel Underarm,300000.0,
+Peeling,Bright Peel Leg,750000.0,
+Peeling,Bright Peel Back,600000.0,
+Peeling,Light Peel,400000.0,
+Peeling,Acne Peel,400000.0,
+Peeling,Microdermabrasion,500000.0,
+Injeksi,Acne 1-3 Titik,50000.0,
+Injeksi,Acne 4-5 Titik,75000.0,
+Injeksi,Acne 6-10 Titik,100000.0,
+Injeksi,Acne >10 Titik,125000.0,
+Injeksi,Keloid,100000.0,
+Injeksi,Injeksi Brightening,300000.0,
+Injeksi,Infus Brightening,1000000.0,
+Injeksi,Infus Rejuve,1000000.0,
+Injeksi,Vitamin Booster,3000000.0,
+HIFU,HIFU Face,1750000.0,
+HIFU,HIFU Face & Chin,2000000.0,
+HIFU,HIFU Miss V,750000.0,
+Skin Booster,Fairy Skin Booster,5000000.0,
+Skin Booster,DNA Salmon Rejuran,5000000.0,
+Skin Booster,Korean Skin Booster,2500000.0,
+Skin Booster,Profhilo,7500000.0,
+Skin Booster,Hydrosome Skin Booster,5500000.0,
+Skin Booster,Crystal Clear Skin Booster,3000000.0,
+Skin Booster,Salmon Glow Repair,2500000.0,(Subsisi+Skinbooster)
+Skin Booster,Collagen Stimulator,3500000.0,
+Skin Booster,Exosome Only,3500000.0,
+Hydra Meso,Hydra Lifting,1750000.0,
+Hydra Meso,Hydra Brightening,1750000.0,
+Hydra Meso,Hydra Melasma,1500000.0,
+Hydra Meso,Hydra Stretchmark,1500000.0,up to 2.000.000
+Hydra Meso,Hydra Hair Growth,1850000.0,
+Lain-Lain,PRP Face / Hair,1750000.0,
+Lain-Lain,Pore Perfection,1500000.0,
+Lain-Lain,Subsisi,500000.0,*
+Consultation,Filler,,Price upon consultation
+Consultation,Threadlift,,Price upon consultation
+Consultation,Botox,,Price upon consultation
+Intimate Package,Intimate Glow,840000.0,HIFU Miss V + Peeling Bikini Line
+Intimate Package,Intimate Smooth,840000.0,HIFU Miss V + HR Bikini Line
+Intimate Package,Intimate Perfection,1200000.0,HIFU Miss V + HR Bikini Line + Peeling Bikini Line
+Hair Treatment,PRP Hair,1750000.0,
+Hair Treatment,Hair Booster,3000000.0,
+Hair Treatment,Hydra Hair Growth,1850000.0,
+Package,T-Glow,2400000.0,Multi-step facial & mask package
+Package,Baby Bright,2100000.0,
+Package,Acne Blast,550000.0,
+Package,Glass Skin,2100000.0,
+Package,Perfect Lift,2700000.0,
+Package,Black Peel Laser,1200000.0,
+Slimming,Cryo Slim,3500000.0,per cycle
+Slimming,Meso Slimming Body,2500000.0,
+Slimming,Meso Slimming Cheek,1500000.0,
+Slimming,Meso Slimming Double Chin,1500000.0,
+Slimming,RF Arm,600000.0,
+Slimming,RF Tight,750000.0,
+Slimming,RF Belly,750000.0,
+Slimming,RF Bust Breast,500000.0,
+Slimming,Meso Freeze,4500000.0,Cryo Slim + Meso Slimming Body
+Sparkling/Oxy,Oxy Sparkling Bubble,1600000.0,
+Sparkling/Oxy,Oxy Sparkling Detox,1600000.0,New Variant
+Sparkling/Oxy,Oxy Sparkling Revive,1600000.0,New Variant
+Sparkling/Oxy,Oxy Sparkling Hydrate,1600000.0,New Variant
+Sparkling/Oxy,Sparkling Bubble Oxy,1500000.0,
+Sparkling/Oxy,Flawless Body,1500000.0,RF Body + Microdermabrasion
+Sparkling/Oxy,Revitalize Body,1700000.0,RF Body + Sparkling Bubble Body

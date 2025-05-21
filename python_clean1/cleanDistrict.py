@@ -8,7 +8,7 @@ def split_and_clean_districts(
 ):
     df = pd.read_excel(input_path)
 
-    mask_not_found = df["District"].astype(str) == "Not Found akwokaow"
+    mask_not_found = df["District"].astype(str) == "Not Found"
     # df_no = df[mask_not_found].copy()
     df_yes = df[~mask_not_found].copy()
 
@@ -23,9 +23,9 @@ def split_and_clean_districts(
     # print(f"Wrote {len(df_no)} rows to '{output_without}'")
 
 if __name__ == "__main__":
-    INPUT = "has_address_with_district2.xlsx"
+    INPUT = "no_redundant_data.xlsx"
     base = os.path.dirname(INPUT)
-    OUT_WITH = os.path.join(base, "has_address_valid_district2.xlsx")
+    OUT_WITH = os.path.join(base, "has_address_valid_district3.xlsx")
     # OUT_NO   = os.path.join(base, "has_address_no_district2.xlsx")
 
     split_and_clean_districts(INPUT, OUT_WITH)

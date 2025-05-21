@@ -20,7 +20,7 @@ def parse_date(date_str):
         # Split date parts
         parts = date_str.split('-')
         if len(parts) != 3:
-            return pd.NaT # Invalid format
+            return pd.NaT
 
         day, month, year_part = parts
         day = int(day)
