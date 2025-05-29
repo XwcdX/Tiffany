@@ -9,9 +9,9 @@ def normalize_name(s):
     if pd.isna(s):
         return ''
     s = str(s).lower()
-    s = re.sub(r'[^a-z0-9\s]', ' ', s)  # remove special characters
-    s = re.sub(r'\b(package|laser|add|rabu|dj|5x|3x)\b', '', s)  # remove specific words
-    s = re.sub(r'\s+', ' ', s).strip()  # collapse multiple spaces and trim
+    s = re.sub(r'[^a-z0-9\s]', ' ', s)
+    s = re.sub(r'\b(package|laser|add|rabu|dj|5x|3x)\b', '', s)
+    s = re.sub(r'\s+', ' ', s).strip()
     return s
 
 # Normalize treatment and service names
