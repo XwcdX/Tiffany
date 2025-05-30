@@ -14,11 +14,8 @@ st.title("Customer Analysis Dashboard")
 @st.cache_data
 def load_data():
     try:
-        # df_member is for Section 1 (if you decide to keep/re-enable it)
         df_member = pd.read_excel("member_spending.xlsx")
-        # df_all now contains RFM data from "all_customer_combined_info.xlsx"
-        df_all = pd.read_excel("all_customer_combined_info.xlsx")
-        # df_treat is no longer used as Section 3 is removed
+        df_all = pd.read_excel("all_customer_combined_inf.xlsx")
         # df_treat = pd.read_excel("member_treatment_summary.xlsx")
         return df_member, df_all #, df_treat
     except FileNotFoundError as e:
@@ -130,18 +127,17 @@ if not df_all.empty:
     # --- Check for essential RFM columns ---
     rfm_cols = ['NAMA CUSTOMER', 'Total_Spent', 'Status',
                 'Recency_Days', 'Frequency', 'R_Score', 'F_Score', 'M_Score', 'RFM_Classification',
-                'Treatment Summary'] # Treatment Summary is also important here
+                'Treatment Summary']
     missing_cols = [col for col in rfm_cols if col not in df_all.columns]
     if missing_cols:
         st.error(f"The 'all_customer_combined_info.xlsx' file is missing required columns for RFM analysis: {', '.join(missing_cols)}. Please regenerate the file with all RFM fields.")
         st.stop()
 
-    col1_filter_s2, col2_display_s2 = st.columns([1, 2.5]) # Adjusted column ratio
+    col1_filter_s2, col2_display_s2 = st.columns([1, 2.5])
 
     with col1_filter_s2:
         st.subheader("Filters")
 
-        # Filter by Customer Name
         customer_names_s2 = sorted(df_all["NAMA CUSTOMER"].dropna().unique())
         selected_customer_names_s2 = st.multiselect(
             "Filter by Customer Name", customer_names_s2, default=[], key="customer_name_filter_s2"
@@ -284,13 +280,13 @@ if not df_all.empty:
                 st.altair_chart(chart_avg_monetary_rfm, use_container_width=True)
 
             # RFM Scatter Plot (e.g., Recency vs Frequency, color by Monetary or Segment)
-            if len(filtered_all_s2) > 1 and len(filtered_all_s2) < 5000: # Altair struggles with too many points for scatter
+            if len(filtered_all_s2) > 1 and len(filtered_all_s2) < 5000:
                 st.subheader("RFM Score Scatter Plot")
                 scatter_rfm = alt.Chart(filtered_all_s2).mark_circle(size=60).encode(
                     x=alt.X('Recency_Days:Q', scale=alt.Scale(zero=False), title="Recency (Days)"),
                     y=alt.Y('Frequency:Q', scale=alt.Scale(zero=False), title="Frequency (Visits)"),
                     color=alt.Color('M_Score:N', title="Monetary Score"),
-                    size=alt.Size('Total_Spent:Q', title="Total Spent", legend=None), # Optional: size by monetary value
+                    size=alt.Size('Total_Spent:Q', title="Total Spent", legend=None),
                     tooltip=['NAMA CUSTOMER', 'RFM_Classification', 'Recency_Days', 'Frequency', 'Total_Spent']
                 ).properties(
                     title='Recency vs. Frequency (Colored by Monetary Score)'
