@@ -16,7 +16,6 @@ import traceback
 # --- Page Configuration ---
 st.set_page_config(layout="wide", page_title="Customer Analytics Dashboard")
 
-# --- Helper Functions ---
 @st.cache_data
 def load_data():
     try:
@@ -30,40 +29,33 @@ def load_data():
         st.markdown("---")
         st.subheader("Debug: Date Parsing in `load_data()`")
 
-        original_dates_copy = transactions_df['Date'].copy() # For comparison if NaTs occur
+        original_dates_copy = transactions_df['Date'].copy()
 
         st.write("Original 'Date' column sample (first 5 from Excel):", original_dates_copy.head().tolist())
         st.write("Original 'Date' column dtype from Excel:", original_dates_copy.dtype)
 
-        # --- CRITICAL STEP: Convert ALL to string FIRST to neutralize Excel's pre-parsing ---
         st.write("Converting entire 'Date' column to string before parsing...")
         date_series_as_strings = original_dates_copy.astype(str)
         st.write("Sample after astype(str):", date_series_as_strings.head().tolist())
 
-        # Attempt 1: Parse string dates with dayfirst=True
-        # This is the most likely to work for D/M/Y and D/M/YY formats if they are strings.
         st.write("Attempting `pd.to_datetime` with `dayfirst=True` on string-converted dates...")
         parsed_dates = pd.to_datetime(date_series_as_strings, dayfirst=True, errors='coerce')
         st.write(f"After `dayfirst=True`: {parsed_dates.count()} valid dates, {parsed_dates.isnull().sum()} NaT.")
         st.write("Sample of parsed dates after `dayfirst=True`:", parsed_dates.dropna().head().tolist())
 
-
-        # Attempt 2: If dayfirst=True left NaTs, try specific D/M/Y formats on those remaining NaTs
         remaining_nat_mask_after_dayfirst = parsed_dates.isnull()
         if remaining_nat_mask_after_dayfirst.any():
             st.write(f"Found {remaining_nat_mask_after_dayfirst.sum()} NaTs after `dayfirst=True`. Trying specific formats for these...")
             
-            # Work only on the strings that are still NaT
             strings_for_specific_formats = date_series_as_strings[remaining_nat_mask_after_dayfirst]
             
             formats_to_try_for_strings = [
-                '%d/%m/%Y',  # e.g., 13/01/2024
-                '%d/%m/%y',  # e.g., 13/01/24
-                # '%Y-%m-%d %H:%M:%S', # Already handled if `astype(str)` produced this from datetime
-                # '%Y-%m-%d',          # Already handled
+                '%d/%m/%Y',
+                '%d/%m/%y',
+                # '%Y-%m-%d %H:%M:%S',
+                # '%Y-%m-%d',
             ]
             
-            # This series will hold dates parsed specifically from strings in this stage
             reparsed_from_specific_formats = pd.Series([pd.NaT] * len(strings_for_specific_formats), 
                                                        index=strings_for_specific_formats.index, 
                                                        dtype='datetime64[ns]')
@@ -71,13 +63,11 @@ def load_data():
             for fmt in formats_to_try_for_strings:
                 if reparsed_from_specific_formats.isnull().any():
                     current_nat_in_batch_mask = reparsed_from_specific_formats.isnull()
-                    # Apply format only to those still NaT in this reparsing batch
                     temp_reparsed = pd.to_datetime(strings_for_specific_formats[current_nat_in_batch_mask], 
                                                    format=fmt, errors='coerce')
                     reparsed_from_specific_formats = reparsed_from_specific_formats.fillna(temp_reparsed)
                     st.write(f"Using format '{fmt}' on remaining strings: {reparsed_from_specific_formats.count()} of this batch now parsed.")
             
-            # Update the main parsed_dates series with these newly parsed dates
             parsed_dates = parsed_dates.fillna(reparsed_from_specific_formats)
             st.write(f"After trying specific D/M/Y formats: {parsed_dates.count()} total valid dates, {parsed_dates.isnull().sum()} remain NaT.")
 
@@ -90,7 +80,7 @@ def load_data():
             st.write("Original values for rows that remained NaT:")
             st.dataframe(pd.DataFrame({
                 'Original_Date_Value': original_dates_copy[transactions_df['Date'].isnull()]
-            }).head(20)) # Show more of these problematic original values
+            }).head(20))
             transactions_df.dropna(subset=['Date'], inplace=True)
             if transactions_df.empty:
                 st.error("All rows dropped after date parsing. Check Excel file for date consistency.")
@@ -105,7 +95,7 @@ def load_data():
             min_date_final = transactions_df['Date'].min()
             max_date_final = transactions_df['Date'].max()
             st.write(f"Min Date in final DataFrame: {min_date_final}")
-            st.write(f"Max Date in final DataFrame: {max_date_final}") # <<< PAY ATTENTION TO THIS
+            st.write(f"Max Date in final DataFrame: {max_date_final}")
             if pd.notna(min_date_final):
                 year_counts = transactions_df['Date'].dt.year.value_counts().sort_index()
                 st.write("Value counts of years in final 'Date' column:")
@@ -123,7 +113,7 @@ def load_data():
                     }).head(50))
                 
                 # Also check for very old dates again
-                RECENT_YEAR_THRESHOLD = 2023 # Adjust if your data can legitimately start earlier
+                RECENT_YEAR_THRESHOLD = 2023
                 if min_date_final.year < RECENT_YEAR_THRESHOLD:
                     st.error(f"WARNING: Minimum date year {min_date_final.year} is before threshold {RECENT_YEAR_THRESHOLD}. Showing problematic original rows:")
                     problem_rows_min = transactions_df[transactions_df['Date'].dt.year < RECENT_YEAR_THRESHOLD]
@@ -156,18 +146,16 @@ def load_data():
 # --- get_month_year function ---
 def get_month_year(period_str):
     try:
-        # Assumes period_str is like 'YYYY-MM'
         return datetime.strptime(period_str, "%Y-%m").strftime("%b %Y")
-    except ValueError: # Handle if already formatted or different format
-        try: # Attempt to parse if it's a fuller date string already transformed
+    except ValueError:
+        try:
             dt_obj = pd.to_datetime(period_str)
             return dt_obj.strftime("%b %Y")
         except:
-            return str(period_str) # Fallback
+            return str(period_str)
 
 # --- Load Data ---
-# To see original dates if NaT occurs
-if "mapped_treatments.xlsx" in pd.ExcelFile("mapped_treatments.xlsx").sheet_names: # Basic check
+if "mapped_treatments.xlsx" in pd.ExcelFile("mapped_treatments.xlsx").sheet_names:
     transactions_df_original_dates = pd.read_excel("mapped_treatments.xlsx", sheet_name="mapped_treatments", usecols=['Date'])['Date']
 else:
     transactions_df_original_dates = pd.Series(dtype='object')
@@ -180,7 +168,6 @@ st.title("📈 Customer Analytics Dashboard")
 
 if transactions_df.empty:
     st.error("Transaction data is empty after loading and processing. Dashboard functionality will be severely limited.")
-    # Displaying the raw date debug info from load_data might be useful here if it's already printed
     st.stop()
 if rfm_summary_df.empty:
     st.warning("RFM summary data could not be loaded. Some parts of the dashboard might not work.")
@@ -194,7 +181,7 @@ descriptive_tabs = st.tabs([
     "📈 Time-Series Analysis"
 ])
 
-with descriptive_tabs[0]: # RFM Segmentation Overview
+with descriptive_tabs[0]:
     st.subheader("RFM Classification Distribution")
     if not rfm_summary_df.empty and 'RFM_Classification' in rfm_summary_df.columns:
         segment_counts = rfm_summary_df['RFM_Classification'].value_counts().reset_index()
@@ -243,24 +230,22 @@ with descriptive_tabs[1]: # Cohort Analysis
                 cohort_counts_abs = cohort_data.pivot_table(index='CohortMonth', columns='CohortIndex', values='NAMA CUSTOMER').fillna(0).astype(int)
 
                 if not cohort_counts_abs.empty:
-                    cohort_sizes = cohort_counts_abs.iloc[:, 0] # This is a Pandas Series: Index=CohortMonth, Values=Size
+                    cohort_sizes = cohort_counts_abs.iloc[:, 0]
                     retention_matrix_pct = cohort_counts_abs.divide(cohort_sizes, axis=0)
                     
-                    # --- Create Y-axis labels with cohort size ---
                     y_axis_labels_with_size = []
-                    for cohort_month_str, size in cohort_sizes.items(): # Iterate through the cohort_sizes Series
+                    for cohort_month_str, size in cohort_sizes.items():
                         formatted_month = get_month_year(cohort_month_str)
                         y_axis_labels_with_size.append(f"{formatted_month} (N={size})")
                     
-                    # Prepare text for heatmap cells (Percentage% (AbsoluteCount))
                     text_labels = []
                     for i in range(len(retention_matrix_pct.index)):
                         row_labels = []
                         for j in range(len(retention_matrix_pct.columns)):
                             pct_val = retention_matrix_pct.iloc[i, j]
                             count_val = cohort_counts_abs.iloc[i, j]
-                            if pd.isna(pct_val) or cohort_sizes.iloc[i] == 0: # Handle division by zero or empty cohort
-                                row_labels.append("0% (0)") # Or "N/A"
+                            if pd.isna(pct_val) or cohort_sizes.iloc[i] == 0:
+                                row_labels.append("0% (0)")
                             else:
                                 row_labels.append(f"{pct_val * 100:.1f}% ({count_val})")
                         text_labels.append(row_labels)
@@ -269,7 +254,7 @@ with descriptive_tabs[1]: # Cohort Analysis
                     fig_retention_heatmap = go.Figure(data=go.Heatmap(
                         z=retention_matrix_pct.mul(100).round(1).fillna(0).values,
                         x=[f"Month {i}" for i in retention_matrix_pct.columns],
-                        y=y_axis_labels_with_size, # Use the new Y-axis labels
+                        y=y_axis_labels_with_size,
                         colorscale='Viridis',
                         text=text_labels, 
                         texttemplate="%{text}", 
@@ -280,13 +265,12 @@ with descriptive_tabs[1]: # Cohort Analysis
                     fig_retention_heatmap.update_layout(
                         title='Monthly Customer Retention by Cohort',
                         xaxis_title='Months Since First Purchase (Cohort Index)',
-                        yaxis_title='Cohort (First Purchase Month, N = Initial Size)', # Updated Y-axis title
+                        yaxis_title='Cohort (First Purchase Month, N = Initial Size)',
                         yaxis_autorange='reversed',
                         height=max(400, len(y_axis_labels_with_size) * 30 + 150) 
                     )
                     st.plotly_chart(fig_retention_heatmap, use_container_width=True)
 
-                    # Display the separate table for initial cohort sizes as well (good for clarity)
                     st.write("Initial Cohort Sizes (Number of new customers in Month 0):")
                     cohort_sizes_display = cohort_sizes.copy()
                     cohort_sizes_display.index = [get_month_year(idx) for idx in cohort_sizes_display.index.astype(str)]
@@ -298,19 +282,19 @@ with descriptive_tabs[1]: # Cohort Analysis
             st.error(f"Error during Cohort Analysis: {e}")
             st.error(traceback.format_exc())
 
-with descriptive_tabs[2]: # Time-Series Analysis
+with descriptive_tabs[2]:
     st.subheader("Revenue and Transaction Volume Over Time")
 
     if 'TransactionMonth' not in transactions_df.columns or 'Total_Price' not in transactions_df.columns:
         st.warning("Required columns ('TransactionMonth', 'Total_Price') missing for Time-Series Revenue Analysis.")
-    elif transactions_df['TransactionMonth'].isnull().all() or transactions_df['Date'].isnull().all(): # Check if TransactionMonth or Date is all NaT
+    elif transactions_df['TransactionMonth'].isnull().all() or transactions_df['Date'].isnull().all():
         st.error("TransactionMonth or Date data is all invalid. Cannot perform Time-Series Analysis.")
     else:
         try:
             # Ensure TransactionMonthDate can be created
             monthly_revenue = transactions_df.groupby('TransactionMonth')['Total_Price'].sum().reset_index()
             monthly_revenue['TransactionMonthDate'] = pd.to_datetime(monthly_revenue['TransactionMonth'], errors='coerce')
-            monthly_revenue.dropna(subset=['TransactionMonthDate'], inplace=True) # Drop if TransactionMonth was unparseable
+            monthly_revenue.dropna(subset=['TransactionMonthDate'], inplace=True)
             
             if monthly_revenue.empty:
                 st.warning("No valid monthly revenue data after processing TransactionMonth.")
@@ -342,7 +326,7 @@ with descriptive_tabs[2]: # Time-Series Analysis
 
     st.subheader("Seasonality Decomposition (Monthly Revenue)")
     if 'monthly_revenue' in locals() and not monthly_revenue.empty and 'TransactionMonthDate' in monthly_revenue.columns:
-        if len(monthly_revenue['TransactionMonthDate'].dropna()) >= 24 : # Ensure we count non-NaT dates
+        if len(monthly_revenue['TransactionMonthDate'].dropna()) >= 24 :
             period = 12
         elif len(monthly_revenue['TransactionMonthDate'].dropna()) >= 4:
             period = max(2, len(monthly_revenue['TransactionMonthDate'].dropna()) // 2)
@@ -434,9 +418,9 @@ with predictive_tabs[0]: # CLV
                         clv_ggf_customers.rename(columns={0: 'Predicted_CLV'}, inplace=True)
                     elif predicted_clv_series.name is not None and predicted_clv_series.name != 'NAMA CUSTOMER' and 'Predicted_CLV' not in clv_ggf_customers.columns:
                          clv_ggf_customers.rename(columns={predicted_clv_series.name: 'Predicted_CLV'}, inplace=True)
-                    elif 'Predicted_CLV' not in clv_ggf_customers.columns and len(clv_ggf_customers.columns) > 1: # Check if there's a value column
+                    elif 'Predicted_CLV' not in clv_ggf_customers.columns and len(clv_ggf_customers.columns) > 1:
                         value_col_name = clv_ggf_customers.columns[-1]
-                        if value_col_name != 'NAMA CUSTOMER': # Ensure it's not the customer ID column
+                        if value_col_name != 'NAMA CUSTOMER':
                              clv_ggf_customers.rename(columns={value_col_name: 'Predicted_CLV'}, inplace=True)
                         else:
                              st.error("Could not reliably identify the predicted CLV value column.")
@@ -457,7 +441,6 @@ with predictive_tabs[0]: # CLV
 
                     if 'Predicted_CLV' in clv_results.columns:
                         clv_results['Predicted_CLV'] = clv_results['Predicted_CLV'].fillna(0).round(2)
-                    else: # Ensure the column exists for display even if all above failed
                         clv_results['Predicted_CLV'] = 0 
                         st.warning("'Predicted_CLV' column was not present after processing. Displaying with zeros.")
                 
@@ -467,10 +450,6 @@ with predictive_tabs[0]: # CLV
                     st.info("This can happen with insufficient data or model assumptions not met.")
 
     if not clv_results.empty and 'Predicted_CLV' in clv_results.columns:
-        # Store clv_prediction_days in clv_results if you want to display it, e.g.,
-        # if 'clv_prediction_days' in locals(): clv_results['clv_prediction_days_used'] = clv_prediction_days
-        
-        # For display, try to get clv_prediction_days if it was set
         days_to_display = "N/A"
         if 'clv_prediction_days' in locals():
             days_to_display = clv_prediction_days
@@ -499,7 +478,7 @@ with predictive_tabs[0]: # CLV
         st.info("CLV results are empty or 'Predicted_CLV' column is missing after processing. Cannot display CLV table or distribution.")
 
 
-with predictive_tabs[1]: # Churn Modeling
+with predictive_tabs[1]:
     st.subheader("Churn/Attrition Prediction")
     st.info("""
     **Churn Definition Approach:**
@@ -512,7 +491,7 @@ with predictive_tabs[1]: # Churn Modeling
     if 'Date' not in transactions_df.columns or transactions_df['Date'].isnull().all():
         st.warning("Date column is missing or invalid. Cannot proceed with Churn Modeling.")
         churn_model_possible = False
-    elif transactions_df['Date'].max() < pd.to_datetime("2025-01-01", dayfirst=True): # Example date
+    elif transactions_df['Date'].max() < pd.to_datetime("2025-01-01", dayfirst=True):
         st.warning("Not enough future data (e.g., post Dec 2024) to define a churn window for this example based on Jan 2025 start.")
         churn_model_possible = False
     elif 'NAMA CUSTOMER' not in transactions_df.columns or 'Total_Price' not in transactions_df.columns:
@@ -521,23 +500,21 @@ with predictive_tabs[1]: # Churn Modeling
 
     if churn_model_possible:
         try:
-            observation_end_date = pd.to_datetime("2024-12-31", dayfirst=True) # Define your actual observation end
-            churn_window_start_date = pd.to_datetime("2025-01-01", dayfirst=True) # Define actual churn window start
-            churn_window_end_date = transactions_df['Date'].max() # Or a fixed date like "2025-04-30"
+            observation_end_date = pd.to_datetime("2024-12-31", dayfirst=True)
+            churn_window_start_date = pd.to_datetime("2025-01-01", dayfirst=True)
+            churn_window_end_date = transactions_df['Date'].max()
 
             obs_period_customers = transactions_df[transactions_df['Date'] <= observation_end_date]['NAMA CUSTOMER'].unique()
             
-            # Customers active in churn window
             churn_window_customers = transactions_df[
                 (transactions_df['Date'] >= churn_window_start_date) &
-                (transactions_df['Date'] <= churn_window_end_date) # Make sure churn_window_end_date is valid
+                (transactions_df['Date'] <= churn_window_end_date)
             ]['NAMA CUSTOMER'].unique()
 
             churn_df = pd.DataFrame({'NAMA CUSTOMER': obs_period_customers})
-            churn_df['Churned'] = 1 # Assume churned
+            churn_df['Churned'] = 1
             churn_df.loc[churn_df['NAMA CUSTOMER'].isin(churn_window_customers), 'Churned'] = 0
 
-            # Features based on observation period
             obs_period_transactions = transactions_df[transactions_df['Date'] <= observation_end_date]
             if obs_period_transactions.empty:
                 st.warning("No transactions found in the defined observation period for churn modeling.")
@@ -590,7 +567,7 @@ with predictive_tabs[1]: # Churn Modeling
                         importance_df = importance_df.sort_values('importance', ascending=False)
                         fig_imp = px.bar(importance_df, x='feature', y='importance', title="Feature Importances for Churn")
                         st.plotly_chart(fig_imp, use_container_width=True)
-        except ValueError as ve: # Catch specific errors like from train_test_split if stratify fails
+        except ValueError as ve:
             st.error(f"A ValueError occurred during churn modeling: {ve}")
             st.error(traceback.format_exc())
         except Exception as e:
@@ -598,7 +575,7 @@ with predictive_tabs[1]: # Churn Modeling
             st.error(traceback.format_exc())
 
 
-with predictive_tabs[2]: # Next-Purchase Timing
+with predictive_tabs[2]:
     st.subheader("Next-Purchase Timing Insights (Basic)")
     st.info("Insights into time between purchases for repeat customers.")
 
@@ -612,15 +589,14 @@ with predictive_tabs[2]: # Next-Purchase Timing
         try:
             inter_purchase_df = transactions_df.sort_values(['NAMA CUSTOMER', 'Date'])
             inter_purchase_df['Prev_Date'] = inter_purchase_df.groupby('NAMA CUSTOMER')['Date'].shift(1)
-            inter_purchase_df.dropna(subset=['Prev_Date'], inplace=True) # Keep only repeat purchases
+            inter_purchase_df.dropna(subset=['Prev_Date'], inplace=True)
             
             if not inter_purchase_df.empty:
                 inter_purchase_df['Inter_Purchase_Time_Days'] = (inter_purchase_df['Date'] - inter_purchase_df['Prev_Date']).dt.days
                 
-                # Filter out any negative or extremely large inter-purchase times that might indicate data issues
                 inter_purchase_df_filtered = inter_purchase_df[
                     (inter_purchase_df['Inter_Purchase_Time_Days'] >= 0) &
-                    (inter_purchase_df['Inter_Purchase_Time_Days'] < 1000) # Adjust upper bound if necessary
+                    (inter_purchase_df['Inter_Purchase_Time_Days'] < 1000)
                 ]
 
                 if not inter_purchase_df_filtered.empty:

@@ -669,17 +669,71 @@ for col_name in final_columns_ordered: # Ensure all final columns exist
         else: all_customer_combined_df[col_name] = 'Unknown'
 all_customer_combined_df = all_customer_combined_df[final_columns_ordered]
 
+recency_cutpoints = rfm_df['Recency_Days'].quantile([1/3, 2/3])
+print(recency_cutpoints)
+
+unique_f_values = sorted(rfm_df['Frequency'].unique())
+f_labels = ['Low', 'Medium', 'High']
+f_score_map = {}
+
+if not unique_f_values:
+    # no rows at all
+    pass
+elif len(unique_f_values) == 1:
+    # only one distinct frequency → label it 'Low'
+    f_score_map = { unique_f_values[0]: f_labels[0] }
+elif len(unique_f_values) == 2:
+    # two distinct frequencies → map smallest→Low, largest→Medium
+    f_score_map = {
+        unique_f_values[0]: f_labels[0],
+        unique_f_values[1]: f_labels[1]
+    }
+else:
+    # three or more distinct frequencies → try qcut on the unique values
+    try:
+        binned = pd.qcut(
+            pd.Series(unique_f_values),
+            q=3,
+            labels=f_labels,
+            duplicates='drop'
+        )
+        # pd.qcut returns a Categorical indexed by 0..(n_unique-1)
+        f_score_map = {
+            freq_val: binned.iloc[i]
+            for i, freq_val in enumerate(unique_f_values)
+        }
+    except ValueError:
+        # fallback: evenly assign labels across sorted unique_f_values
+        n_unique = len(unique_f_values)
+        assigned = []
+        for i in range(n_unique):
+            label_idx = min(int(i * 3 / n_unique), 2)
+            assigned.append(f_labels[label_idx])
+        f_score_map = dict(zip(unique_f_values, assigned))
+
+# Now print out the mapping:
+print("\nFrequency → F_Score mapping in this dataset:")
+for freq_val, label in f_score_map.items():
+    print(f"  • Frequency = {freq_val:>2} → F_Score = '{label}'")
+
+mon_rank_quantiles = rfm_df['MonetaryValue'].rank(method='first').quantile([1/3, 2/3])
+print("MonetaryValue rank cut-points (Q1/Q2):")
+print(mon_rank_quantiles)
+
+mon_value_quantiles = rfm_df['MonetaryValue'].quantile([1/3, 2/3])
+print("MonetaryValue value cut-points (Q1/Q2):")
+print(mon_value_quantiles)
 # --- Save the Combined File ---
-output_filename = "all_customer_combined_info_RFM_corrected_full.xlsx"
-print(f"\nSaving combined data to '{output_filename}'...")
-try:
-    all_customer_combined_df.to_excel(output_filename, index=False)
-    print(f"✅ Selesai. File '{output_filename}' berhasil disimpan.")
-    print("\nColumns in the output file:")
-    print(all_customer_combined_df.columns.tolist())
-    print("\nSample of the output data (first 5 rows):")
-    print(all_customer_combined_df.head())
-except Exception as e:
-    print(f"ERROR: Could not save the Excel file '{output_filename}'. {e}")
-    print(traceback.format_exc())
-print("\nRFM Script Execution Finished.")
+# output_filename = "all_customer_combined_info_RFM_corrected_full.xlsx"
+# print(f"\nSaving combined data to '{output_filename}'...")
+# try:
+#     all_customer_combined_df.to_excel(output_filename, index=False)
+#     print(f"✅ Selesai. File '{output_filename}' berhasil disimpan.")
+#     print("\nColumns in the output file:")
+#     print(all_customer_combined_df.columns.tolist())
+#     print("\nSample of the output data (first 5 rows):")
+#     print(all_customer_combined_df.head())
+# except Exception as e:
+#     print(f"ERROR: Could not save the Excel file '{output_filename}'. {e}")
+#     print(traceback.format_exc())
+# print("\nRFM Script Execution Finished.")

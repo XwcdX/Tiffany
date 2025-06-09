@@ -26,31 +26,24 @@ def parse_date(date_str):
         day = int(day)
         month = int(month)
 
-        # Attempt to fix the year part
-        if len(year_part) == 2: # YY format
+        if len(year_part) == 2:
             year = int(year_part)
-            # Assumption: years < 30 are 20xx, others are 19xx
-            # Adjust this logic if needed based on your data's actual range
             year = 2000 + year if year < 30 else 1900 + year
-        elif len(year_part) == 3: # YYY format (assuming 19Y or 20Y?)
+        elif len(year_part) == 3:
             year_prefix = year_part[0]
             year_suffix = int(year_part[1:])
             if year_prefix == '1':
                  year = 1900 + year_suffix
-            elif year_prefix == '2' or year_prefix == '0': # e.g., 200 -> 2000
+            elif year_prefix == '2' or year_prefix == '0':
                  year = 2000 + year_suffix
-            else: # Unknown 3-digit year format
+            else:
                  return pd.NaT
-            # Basic validation for 3-digit years - refine if necessary
-            # For example, '195' likely means 1995, not 1905.
-            # Let's assume YYY always implies 19YY if starts with 1, 20YY if starts with 2/0
-            # Example specific fix: 195 -> 1995, 197 -> 1997, 199 -> 1999?
-            if year < 1950 and year_part.startswith('1'): # Heuristic: 1XX likely means 19XX
-                 year += 90 # Guessing 195 -> 1995
-        elif len(year_part) == 4: # YYYY format
+            if year < 1950 and year_part.startswith('1'):
+                 year += 90
+        elif len(year_part) == 4:
             year = int(year_part)
         else:
-            return pd.NaT # Invalid year format
+            return pd.NaT
 
         return pd.Timestamp(year=year, month=month, day=day)
 
@@ -69,16 +62,14 @@ def load_data(file_path):
             st.error(f"Unsupported file format: {file_path}")
             return pd.DataFrame()
 
-        # --- Column Renaming and Cleaning (Adjust based on exact headers in your file) ---
-        # Create a mapping from image headers to clean names
         column_mapping = {
             'No.': 'no',
             'Code': 'code',
             'Name': 'name',
             'VIP': 'vip',
-            'detail': 'detail', # Keep if needed, otherwise remove later
+            'detail': 'detail',
             'Birthplace': 'birthplace',
-            'BirthDate': 'birthdate_str', # Load as string first
+            'BirthDate': 'birthdate_str',
             'Address': 'address',
             'JenisKulit': 'jeniskulit',
             'FitzPatrick': 'fitzpatrick',
@@ -112,17 +103,14 @@ def load_data(file_path):
 
         # Dates
         df['birthdate'] = df['birthdate_str'].apply(parse_date)
-        # Calculate Age (handle NaT dates)
         now = pd.Timestamp.now()
         df['age'] = df['birthdate'].apply(lambda x: (now - x).days // 365 if pd.notna(x) else np.nan)
 
-        # Numeric Columns (convert, coerce errors to NaN)
         numeric_cols = ['vip', 'jeniskulit', 'fitzpatrick']
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
 
-        # Categorical/String Columns (fill NaNs, strip whitespace)
         string_cols = ['name', 'birthplace', 'address', 'category', 'discounttype',
                        'province', 'city', 'country', 'postalcode', 'hp', 'fax',
                        'email', 'profession', 'hobby', 'status', 'district']
@@ -130,16 +118,11 @@ def load_data(file_path):
             if col in df.columns:
                 df[col] = df[col].astype(str).str.strip().replace({'nan': 'Unknown', '': 'Unknown', 'None':'Unknown'})
 
-        # Yes/No Columns (fill NaNs with 'No' or 'Unknown', standardize)
         yes_no_cols = ['delivery', 'dinein', 'deposit', 'reward', 'points', 'received', 'officer', 'check']
         for col in yes_no_cols:
             if col in df.columns:
                 processed_col = df[col].fillna('no').astype(str).str.strip().str.lower()
                 df[col] = processed_col.apply(lambda x: 'Yes' if x == 'yes' else 'No')
-
-        # Drop columns if they are not needed (e.g., original row number, intermediate columns)
-        # cols_to_drop = ['no', 'birthdate_str', 'detail', 'unnamed_1'] # Example
-        # df = df.drop(columns=[col for col in cols_to_drop if col in df.columns], errors='ignore')
 
         return df
 
@@ -158,13 +141,12 @@ st.title("Customer Data Dashboard")
 
 if df.empty:
     st.warning("Data could not be loaded. Please check the file and try again.")
-    st.stop() # Stop execution if data loading failed
+    st.stop()
 
 # --- Sidebar Filters ---
 st.sidebar.header("Filters")
 
 # Demographics
-# Store user selections in separate variables first
 professions_sel_user = st.sidebar.multiselect("Profession", sorted(df['profession'].unique()))
 cities_sel_user = st.sidebar.multiselect("City", sorted(df['city'].unique()))
 districts_sel_user = st.sidebar.multiselect("District", sorted(df['district'].unique()))
@@ -188,46 +170,39 @@ delivery_sel_user = st.sidebar.multiselect("Delivery", ['Yes', 'No'])
 dinein_sel_user = st.sidebar.multiselect("DineIn", ['Yes', 'No'])
 
 # --- Apply Filters ---
-# Start with a boolean True index
 filtered_idx = pd.Series(True, index=df.index)
 
-# Apply filters conditionally based on USER SELECTION (check if the list is not empty)
-
-if professions_sel_user: # Check if the user selected any profession
+if professions_sel_user:
     filtered_idx &= df['profession'].isin(professions_sel_user)
 
-if cities_sel_user: # Check if the user selected any city
-    filtered_idx &= df['city'].isin(cities_sel_user) # <<< Use the user selection variable
+if cities_sel_user:
+    filtered_idx &= df['city'].isin(cities_sel_user)
 
-if districts_sel_user: # Check if the user selected any district
+if districts_sel_user:
     filtered_idx &= df['district'].isin(districts_sel_user)
 
-if df['age'].notna().any(): # Only filter age if age data exists
+if df['age'].notna().any():
      filtered_idx &= df['age'].between(age_range[0], age_range[1], inclusive='both')
 
-if categories_sel_user: # Check if the user selected any category
+if categories_sel_user:
     filtered_idx &= df['category'].isin(categories_sel_user)
 
-if statuses_sel_user: # Check if the user selected any status
+if statuses_sel_user:
     filtered_idx &= df['status'].isin(statuses_sel_user)
 
-if vip_levels_sel_user: # Check if the user selected any VIP level
-     # Handle NaN in VIP column if filtering is applied
-     filtered_idx &= df['vip'].isin(vip_levels_sel_user) # No need for NaN check here if user selected specific levels
+if vip_levels_sel_user:
+     filtered_idx &= df['vip'].isin(vip_levels_sel_user)
 
-if skin_types_sel_user: # Check if the user selected any skin type
+if skin_types_sel_user:
      filtered_idx &= df['jeniskulit'].isin(skin_types_sel_user)
 
-if fitzpatrick_sel_user: # Check if the user selected any Fitzpatrick scale
+if fitzpatrick_sel_user:
      filtered_idx &= df['fitzpatrick'].isin(fitzpatrick_sel_user)
 
-if delivery_sel_user: # Check if the user selected specific Delivery options
-    # If user can select BOTH 'Yes' and 'No', this check is fine.
-    # If user selecting nothing means "show all", then this check is also fine.
-    # If user selecting nothing means "show none", the logic needs adjustment. Assuming "show all" if nothing selected.
+if delivery_sel_user:
     filtered_idx &= df['delivery'].isin(delivery_sel_user)
 
-if dinein_sel_user: # Check if the user selected specific DineIn options
+if dinein_sel_user:
     filtered_idx &= df['dinein'].isin(dinein_sel_user)
 
 
@@ -235,21 +210,18 @@ filtered_df = df[filtered_idx].copy()
 
 # --- Data Preview & Download ---
 st.subheader(f"Filtered Data Preview ({len(filtered_df)} records)")
-# Select subset of columns for better preview if needed
 preview_cols = ['name', 'age', 'city', 'district', 'profession', 'category', 'status', 'jeniskulit', 'fitzpatrick', 'vip']
 st.dataframe(filtered_df[[col for col in preview_cols if col in filtered_df.columns]], use_container_width=True)
 
 csv = filtered_df.to_csv(index=False).encode("utf-8")
 st.download_button("📥 Download Filtered Data (CSV)", csv, "filtered_customer_data.csv", "text/csv")
 
-# --- Summary Charts ---
 st.subheader("Distributions and Summaries")
 
 if not filtered_df.empty:
     col1, col2 = st.columns(2)
 
     with col1:
-        # Age Distribution
         st.markdown("**Age Distribution**")
         if filtered_df['age'].notna().any():
             fig_age = px.histogram(filtered_df.dropna(subset=['age']), x="age", title="Customer Age Distribution")
@@ -257,14 +229,12 @@ if not filtered_df.empty:
         else:
             st.info("No age data available for the selected filters.")
 
-        # Category Distribution
         st.markdown("**Customer Category**")
         df_cat = filtered_df['category'].value_counts().reset_index(name="Count")
         df_cat.columns = ["Category", "Count"]
         fig_cat = px.pie(df_cat, names="Category", values="Count", title="Customer Category")
         st.plotly_chart(fig_cat, use_container_width=True)
 
-        # Jenis Kulit (Skin Type) Distribution
         st.markdown("**Jenis Kulit (Skin Type)**")
         if filtered_df['jeniskulit'].notna().any():
             df_skin = filtered_df['jeniskulit'].dropna().astype(int).value_counts().reset_index(name="Count")
@@ -275,21 +245,18 @@ if not filtered_df.empty:
              st.info("No skin type data available for the selected filters.")
 
     with col2:
-        # Profession Distribution
         st.markdown("**Profession Distribution (Top 10)**")
         df_prof = filtered_df['profession'].value_counts().reset_index(name="Count").head(10)
         df_prof.columns = ["Profession", "Count"]
         fig_prof = px.bar(df_prof, y="Profession", x="Count", orientation='h', title="Top 10 Professions")
         st.plotly_chart(fig_prof, use_container_width=True)
 
-        # Status Distribution
         st.markdown("**Customer Status**")
         df_stat = filtered_df['status'].value_counts().reset_index(name="Count")
         df_stat.columns = ["Status", "Count"]
         fig_stat = px.pie(df_stat, names="Status", values="Count", title="Customer Status")
         st.plotly_chart(fig_stat, use_container_width=True)
 
-        # Fitzpatrick Scale Distribution
         st.markdown("**FitzPatrick Scale**")
         if filtered_df['fitzpatrick'].notna().any():
             df_fitz = filtered_df['fitzpatrick'].dropna().astype(int).value_counts().reset_index(name="Count")
@@ -303,42 +270,36 @@ else:
     st.info("No data matches the current filters.")
 
 
-# --- Choropleth Map based on District ---
 st.subheader("Customer Distribution by District Map")
 if not filtered_df.empty:
     try:
         with open(GEOJSON_FILE, 'r', encoding='utf-8') as f:
             geojson_data = json.load(f)
 
-        # Aggregate data by district
         district_counts = filtered_df.groupby('district').size().reset_index(name='Customer Count')
 
-        # Check for districts present in data but potentially missing in GeoJSON or vice-versa
         geojson_districts = {feature['properties'].get('NAME_3') for feature in geojson_data['features']}
         data_districts = set(district_counts['district'])
 
         missing_in_geojson = data_districts - geojson_districts
-        # missing_in_data = geojson_districts - data_districts # Less relevant for plotting
 
         if missing_in_geojson:
              st.warning(f"Note: The following districts found in the data could not be matched to the GeoJSON 'NAME_3' property and won't appear on the map: {', '.join(list(missing_in_geojson))}. Check for exact name matches (case-sensitive) and ensure 'Not Found' or similar placeholders are handled.")
 
-
-        # Create the choropleth map
         fig_map = px.choropleth_mapbox(
             district_counts,
             geojson=geojson_data,
-            locations='district',          # Column in DataFrame matching featureidkey
-            featureidkey='properties.NAME_3', # Path to the district name in GeoJSON properties
-            color='Customer Count',        # Column defining the color intensity
-            color_continuous_scale="Viridis", # Or any other color scale
-            mapbox_style='carto-positron', # Map style
-            center={'lat': -2.5, 'lon': 118.0}, # Centered roughly on Indonesia
-            zoom=3.5,                         # Adjust zoom level as needed
+            locations='district',         
+            featureidkey='properties.NAME_3',
+            color='Customer Count', 
+            color_continuous_scale="Viridis", 
+            mapbox_style='carto-positron',
+            center={'lat': -2.5, 'lon': 118.0},
+            zoom=3.5,
             opacity=0.6,
             title='Customer Count by District (Kecamatan)',
-            hover_name='district',          # Show district name on hover
-            hover_data={'Customer Count': True} # Show count on hover
+            hover_name='district',
+            hover_data={'Customer Count': True}
         )
         fig_map.update_layout(margin={"r":0,"t":30,"l":0,"b":0})
         st.plotly_chart(fig_map, use_container_width=True)
@@ -355,8 +316,7 @@ else:
 # --- Patient Detail Expander ---
 st.subheader("Customer Detail")
 if not filtered_df.empty:
-    with st.expander("Select a customer to view full details", expanded=False): # Start collapsed
-        # --- Customer Selection (Same as before) ---
+    with st.expander("Select a customer to view full details", expanded=False):
         customer_list = filtered_df['name'].tolist()
         if 'code' in filtered_df.columns:
              customer_display_list = filtered_df.apply(lambda row: f"{row['name']} ({row.get('code', 'N/A')})", axis=1).tolist()
@@ -368,10 +328,9 @@ if not filtered_df.empty:
         selected_display_name = st.selectbox(
             "Select Customer",
             options=customer_display_list,
-            key="customer_selector_dense" # Use a different key if needed
+            key="customer_selector_dense"
         )
 
-        # --- Get Selected Customer Data (Same as before) ---
         if selected_display_name and selected_display_name in display_to_index_map:
             selected_index = display_to_index_map[selected_display_name]
             p = filtered_df.loc[selected_index]

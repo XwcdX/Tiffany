@@ -15,7 +15,7 @@ st.title("Customer Analysis Dashboard")
 def load_data():
     try:
         df_member = pd.read_excel("member_spending.xlsx")
-        df_all = pd.read_excel("all_customer_combined_inf.xlsx")
+        df_all = pd.read_excel("all_customer_combined_final.xlsx")
         # df_treat = pd.read_excel("member_treatment_summary.xlsx")
         return df_member, df_all #, df_treat
     except FileNotFoundError as e:
