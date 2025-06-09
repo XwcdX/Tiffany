@@ -1,283 +1,3 @@
-# import pandas as pd
-# import re
-
-# # Load file
-# mapped_df = pd.read_excel("mapped_treatments.xlsx")
-# members_df = pd.read_excel("no_redundant_data.xlsx")
-
-# # Fungsi normalisasi nama
-# def normalize_name(s):
-#     if pd.isna(s):
-#         return ''
-#     return str(s).strip().lower()
-
-# # Normalisasi nama customer dan nama member
-# mapped_df['customer_norm'] = mapped_df['NAMA CUSTOMER'].apply(normalize_name)
-# members_df['member_norm'] = members_df['Name'].apply(normalize_name)
-
-# # === 1. MEMBER SPENDING: no_redundant + total spent ===
-# spending = mapped_df.groupby('customer_norm')['Total_Price'].sum().reset_index()
-# spending.columns = ['member_norm', 'Total_Spent']
-# member_spending_df = members_df.merge(spending, on='member_norm', how='left')
-# member_spending_df['Total_Spent'] = member_spending_df['Total_Spent'].fillna(0)
-
-# # === 2. ALL CUSTOMER SPENDING + STATUS ===
-# customer_spending_df = mapped_df.groupby('customer_norm').agg({
-#     'NAMA CUSTOMER': 'first',
-#     'Total_Price': 'sum'
-# }).reset_index()
-# customer_spending_df['Status'] = customer_spending_df['customer_norm'].isin(members_df['member_norm'])
-# customer_spending_df['Status'] = customer_spending_df['Status'].map({True: 'Member', False: 'Non-Member'})
-
-# # === 3. TREATMENT SUMMARY FOR EACH MEMBER ===
-# # Filter hanya transaksi dari customer yang adalah member
-# member_transactions = mapped_df[mapped_df['customer_norm'].isin(members_df['member_norm'])]
-
-# # Bersihkan nama treatment
-# member_transactions['treatment_clean'] = member_transactions['NAMA TREATMENT'].str.lower().str.strip()
-
-# # Hitung jumlah beli per treatment
-# treatment_summary = (
-#     member_transactions.groupby(['customer_norm', 'treatment_clean'])
-#     .size()
-#     .reset_index(name='Count')
-# )
-
-# # Gabungkan per customer
-# summary_dict = (
-#     treatment_summary.groupby('customer_norm')
-#     .apply(lambda x: ', '.join(f"{row['treatment_clean']} ({row['Count']})" for _, row in x.iterrows()))
-#     .reset_index(name='Treatment Summary')
-# )
-
-# # Gabungkan kembali dengan nama asli
-# summary_final = members_df[['Name']].copy()
-# summary_final['customer_norm'] = summary_final['Name'].apply(normalize_name)
-# summary_final = summary_final.merge(summary_dict, on='customer_norm', how='left')
-
-# # === SIMPAN FILE EXCEL ===
-# member_spending_df.to_excel("member_spending.xlsx", index=False)
-# customer_spending_df.to_excel("all_customer_spending_status.xlsx", index=False)
-# summary_final.to_excel("member_treatment_summary.xlsx", index=False)
-
-# print("✅ Selesai. Tiga file berhasil disimpan.")
-
-
-
-
-
-
-# import pandas as pd
-# import re
-# from datetime import datetime, timedelta
-
-# # --- RFM Segmentation Logic (as provided) ---
-# rfm_logic_data = {
-#     'R': ['High', 'High', 'High', 'High', 'High', 'High', 'High', 'High', 'High',
-#           'Medium', 'Medium', 'Medium', 'Medium', 'Medium', 'Medium', 'Medium', 'Medium', 'Medium',
-#           'Low', 'Low', 'Low', 'Low', 'Low', 'Low', 'Low', 'Low', 'Low'],
-#     'F': ['High', 'High', 'High', 'Medium', 'Medium', 'Medium', 'Low', 'Low', 'Low',
-#           'High', 'High', 'High', 'Medium', 'Medium', 'Medium', 'Low', 'Low', 'Low',
-#           'High', 'High', 'High', 'Medium', 'Medium', 'Medium', 'Low', 'Low', 'Low'],
-#     'M': ['High', 'Medium', 'Low', 'High', 'Medium', 'Low', 'High', 'Medium', 'Low',
-#           'High', 'Medium', 'Low', 'High', 'Medium', 'Low', 'High', 'Medium', 'Low',
-#           'High', 'Medium', 'Low', 'High', 'Medium', 'Low', 'High', 'Medium', 'Low'],
-#     'Classification': ['Champion', 'Loyal', 'Loyal', 'Loyal', 'Potential loyal', 'Promising',
-#                        'Recent Customers', 'Recent Customers', 'Recent Customers', 'At risk',
-#                        'Need attention', 'About to sleep', 'Need attention', 'About to sleep',
-#                        'About to sleep', 'Need attention', 'About to sleep', 'About to sleep',
-#                        'Cant lose them', 'Cant lose them', 'Hibernating', 'Cant lose them',
-#                        'Hibernating', 'Hibernating', 'Cant lose them', 'Hibernating', 'Lost']
-# }
-# rfm_segment_map_df = pd.DataFrame(rfm_logic_data)
-# # -----------------------------------------
-
-# # Function to normalize names
-# def normalize_name(s):
-#     if pd.isna(s):
-#         return ''
-#     return str(s).strip().lower()
-
-# print("Loading data files...")
-# try:
-#     mapped_df = pd.read_excel("mapped_treatments.xlsx")
-#     members_df = pd.read_excel("no_redundant_data.xlsx")
-#     print("Data files loaded successfully.")
-# except FileNotFoundError as e:
-#     print(f"ERROR: Could not load data files. {e}")
-#     print("Please ensure 'mapped_treatments.xlsx' and 'no_redundant_data.xlsx' are in the same directory as the script.")
-#     exit()
-# except Exception as e:
-#     print(f"An unexpected error occurred while loading data files: {e}")
-#     exit()
-
-# # --- Data Preprocessing ---
-# print("Normalizing names...")
-# mapped_df['customer_norm'] = mapped_df['NAMA CUSTOMER'].apply(normalize_name)
-# members_df['member_norm'] = members_df['Name'].apply(normalize_name)
-
-# # --- RFM Calculation ---
-# DATE_COLUMN_NAME = 'Date'
-# PRICE_COLUMN_NAME = 'Total_Price'
-# CUSTOMER_NAME_COLUMN = 'NAMA CUSTOMER'
-
-# print(f"Processing date column '{DATE_COLUMN_NAME}' for RFM calculation...")
-# if DATE_COLUMN_NAME not in mapped_df.columns:
-#     print(f"ERROR: Date column '{DATE_COLUMN_NAME}' not found in mapped_treatments.xlsx.")
-#     print(f"Available columns are: {mapped_df.columns.tolist()}")
-#     print("Please check the DATE_COLUMN_NAME variable in the script or your Excel file.")
-#     exit()
-
-# try:
-#     mapped_df[DATE_COLUMN_NAME] = pd.to_datetime(mapped_df[DATE_COLUMN_NAME])
-#     print(f"Date column '{DATE_COLUMN_NAME}' converted to datetime successfully.")
-# except Exception as e:
-#     print(f"ERROR converting '{DATE_COLUMN_NAME}' to datetime: {e}.")
-#     print("Please check the date format in your Excel file. It should be unambiguous (e.g., YYYY-MM-DD, MM/DD/YYYY).")
-#     exit()
-
-# if PRICE_COLUMN_NAME not in mapped_df.columns:
-#     print(f"ERROR: Price column '{PRICE_COLUMN_NAME}' not found in mapped_treatments.xlsx.")
-#     exit()
-
-
-# print("Calculating RFM metrics...")
-# snapshot_date = mapped_df[DATE_COLUMN_NAME].max() + timedelta(days=1)
-
-# monetary_df = mapped_df.groupby('customer_norm')[PRICE_COLUMN_NAME].sum().reset_index()
-# monetary_df.rename(columns={PRICE_COLUMN_NAME: 'MonetaryValue'}, inplace=True)
-
-# frequency_df = mapped_df.groupby('customer_norm')[DATE_COLUMN_NAME].nunique().reset_index()
-# frequency_df.rename(columns={DATE_COLUMN_NAME: 'Frequency'}, inplace=True)
-
-# recency_df = mapped_df.groupby('customer_norm')[DATE_COLUMN_NAME].max().reset_index()
-# recency_df['Recency_Days'] = (snapshot_date - recency_df[DATE_COLUMN_NAME]).dt.days
-# recency_df.drop(DATE_COLUMN_NAME, axis=1, inplace=True)
-
-# rfm_df = monetary_df.merge(frequency_df, on='customer_norm', how='left')
-# rfm_df = rfm_df.merge(recency_df, on='customer_norm', how='left')
-# rfm_df.fillna({'MonetaryValue': 0, 'Frequency': 0, 'Recency_Days': rfm_df['Recency_Days'].max()}, inplace=True) # Handle new customers
-
-# # 2. Create R, F, M Scores
-# r_labels = ['High', 'Medium', 'Low']
-# f_labels = ['Low', 'Medium', 'High']
-# m_labels = ['Low', 'Medium', 'High']
-
-# score_bins = 3
-
-# try:
-#     rfm_df['R_Score'] = pd.qcut(rfm_df['Recency_Days'], q=score_bins, labels=r_labels, duplicates='drop')
-# except ValueError:
-#     rfm_df['R_Score'] = pd.cut(rfm_df['Recency_Days'], bins=score_bins, labels=r_labels, include_lowest=True, duplicates='drop')
-
-# try:
-#     rfm_df['F_Score'] = pd.qcut(rfm_df['Frequency'].rank(method='first'), q=score_bins, labels=f_labels, duplicates='drop')
-# except ValueError:
-#     rfm_df['F_Score'] = pd.cut(rfm_df['Frequency'], bins=score_bins, labels=f_labels, include_lowest=True, duplicates='drop')
-
-# try:
-#     rfm_df['M_Score'] = pd.qcut(rfm_df['MonetaryValue'].rank(method='first'), q=score_bins, labels=m_labels, duplicates='drop')
-# except ValueError:
-#     rfm_df['M_Score'] = pd.cut(rfm_df['MonetaryValue'], bins=score_bins, labels=m_labels, include_lowest=True, duplicates='drop')
-
-# # 3. Merge with RFM Segmentation Logic
-# rfm_df = rfm_df.merge(rfm_segment_map_df,
-#                       left_on=['R_Score', 'F_Score', 'M_Score'],
-#                       right_on=['R', 'F', 'M'],
-#                       how='left')
-# rfm_df.rename(columns={'Classification': 'RFM_Classification'}, inplace=True)
-# rfm_df.drop(['R', 'F', 'M'], axis=1, inplace=True, errors='ignore')
-# print("RFM metrics and classification calculated.")
-
-# print("Creating base customer DataFrame...")
-# all_customer_base_df = mapped_df.groupby('customer_norm').agg(
-#     NAMA_CUSTOMER_ORIGINAL=(CUSTOMER_NAME_COLUMN, 'first')
-# ).reset_index()
-
-# all_customer_base_df = all_customer_base_df.merge(
-#     rfm_df[['customer_norm', 'MonetaryValue']],
-#     on='customer_norm',
-#     how='left'
-# )
-# all_customer_base_df.rename(columns={'MonetaryValue': 'Total_Spent',
-#                                      'NAMA_CUSTOMER_ORIGINAL': 'NAMA CUSTOMER'}, inplace=True)
-# all_customer_base_df['Total_Spent'] = all_customer_base_df['Total_Spent'].fillna(0)
-
-# all_customer_base_df['Status'] = all_customer_base_df['customer_norm'].isin(members_df['member_norm'])
-# all_customer_base_df['Status'] = all_customer_base_df['Status'].map({True: 'Member', False: 'Non-Member'})
-# print("Base customer DataFrame created.")
-
-# # --- Treatment Summary for All Customers ---
-# print("Calculating treatment summaries for all customers...")
-# if 'NAMA TREATMENT' not in mapped_df.columns:
-#     print("ERROR: 'NAMA TREATMENT' column not found in mapped_treatments.xlsx. Cannot generate treatment summaries.")
-#     all_customers_treatment_summary_str_df = pd.DataFrame(columns=['customer_norm', 'Treatment Summary'])
-# else:
-#     mapped_df['treatment_clean_all'] = mapped_df['NAMA TREATMENT'].apply(normalize_name)
-#     mapped_df_valid_treatments = mapped_df[mapped_df['treatment_clean_all'] != '']
-#     if not mapped_df_valid_treatments.empty:
-#         all_treatment_counts = (
-#             mapped_df_valid_treatments.groupby(['customer_norm', 'treatment_clean_all'])
-#             .size()
-#             .reset_index(name='Count')
-#         )
-#         all_customers_treatment_summary_str_df = (
-#             all_treatment_counts.groupby('customer_norm')
-#             .apply(lambda x: ', '.join(f"{row['treatment_clean_all']} ({row['Count']})" for _, row in x.iterrows()))
-#             .reset_index(name='Treatment Summary')
-#         )
-#     else:
-#         all_customers_treatment_summary_str_df = pd.DataFrame(columns=['customer_norm', 'Treatment Summary'])
-# print("Treatment summaries calculated.")
-
-# # --- Combine All Information ---
-# print("Combining all data for the final report...")
-# all_customer_combined_df = pd.merge(
-#     all_customer_base_df,
-#     all_customers_treatment_summary_str_df,
-#     on='customer_norm',
-#     how='left'
-# )
-# # Fill NaN for Treatment Summary if a customer had spending but no treatments
-# all_customer_combined_df['Treatment Summary'] = all_customer_combined_df['Treatment Summary'].fillna('')
-
-# # Merge the full RFM data
-# all_customer_combined_df = pd.merge(
-#     all_customer_combined_df,
-#     rfm_df[['customer_norm', 'Recency_Days', 'Frequency', 'R_Score', 'F_Score', 'M_Score', 'RFM_Classification']],
-#     on='customer_norm',
-#     how='left'
-# )
-
-# # --- Final Output DataFrame ---
-# final_columns_ordered = [
-#     'NAMA CUSTOMER', 'Total_Spent', 'Status',
-#     'Recency_Days', 'Frequency',
-#     'R_Score', 'F_Score', 'M_Score',
-#     'RFM_Classification',
-#     'Treatment Summary'
-# ]
-
-# final_columns_to_select = [col for col in final_columns_ordered if col in all_customer_combined_df.columns]
-# all_customer_combined_df = all_customer_combined_df[final_columns_to_select]
-
-# # --- Save the Combined File ---
-# output_filename = "all_customer_combined_info.xlsx"
-# print(f"Saving combined data to '{output_filename}'...")
-# try:
-#     all_customer_combined_df.to_excel(output_filename, index=False)
-#     print(f"✅ Selesai. File '{output_filename}' berhasil disimpan.")
-#     print("\nColumns in the output file:")
-#     print(all_customer_combined_df.columns.tolist())
-# except Exception as e:
-#     print(f"ERROR: Could not save the Excel file '{output_filename}'. {e}")
-
-
-
-
-
-
-
 import pandas as pd
 from datetime import datetime, timedelta
 import numpy as np
@@ -711,29 +431,30 @@ else:
             assigned.append(f_labels[label_idx])
         f_score_map = dict(zip(unique_f_values, assigned))
 
-# Now print out the mapping:
-print("\nFrequency → F_Score mapping in this dataset:")
-for freq_val, label in f_score_map.items():
-    print(f"  • Frequency = {freq_val:>2} → F_Score = '{label}'")
+# debug
+# print("\nFrequency → F_Score mapping in this dataset:")
+# for freq_val, label in f_score_map.items():
+#     print(f"  • Frequency = {freq_val:>2} → F_Score = '{label}'")
 
-mon_rank_quantiles = rfm_df['MonetaryValue'].rank(method='first').quantile([1/3, 2/3])
-print("MonetaryValue rank cut-points (Q1/Q2):")
-print(mon_rank_quantiles)
+# mon_rank_quantiles = rfm_df['MonetaryValue'].rank(method='first').quantile([1/3, 2/3])
+# print("MonetaryValue rank cut-points (Q1/Q2):")
+# print(mon_rank_quantiles)
 
-mon_value_quantiles = rfm_df['MonetaryValue'].quantile([1/3, 2/3])
-print("MonetaryValue value cut-points (Q1/Q2):")
-print(mon_value_quantiles)
+# mon_value_quantiles = rfm_df['MonetaryValue'].quantile([1/3, 2/3])
+# print("MonetaryValue value cut-points (Q1/Q2):")
+# print(mon_value_quantiles)
+
 # --- Save the Combined File ---
-# output_filename = "all_customer_combined_info_RFM_corrected_full.xlsx"
-# print(f"\nSaving combined data to '{output_filename}'...")
-# try:
-#     all_customer_combined_df.to_excel(output_filename, index=False)
-#     print(f"✅ Selesai. File '{output_filename}' berhasil disimpan.")
-#     print("\nColumns in the output file:")
-#     print(all_customer_combined_df.columns.tolist())
-#     print("\nSample of the output data (first 5 rows):")
-#     print(all_customer_combined_df.head())
-# except Exception as e:
-#     print(f"ERROR: Could not save the Excel file '{output_filename}'. {e}")
-#     print(traceback.format_exc())
-# print("\nRFM Script Execution Finished.")
+output_filename = "all_customer_combined_info_RFM_corrected_full.xlsx"
+print(f"\nSaving combined data to '{output_filename}'...")
+try:
+    all_customer_combined_df.to_excel(output_filename, index=False)
+    print(f"✅ Selesai. File '{output_filename}' berhasil disimpan.")
+    print("\nColumns in the output file:")
+    print(all_customer_combined_df.columns.tolist())
+    print("\nSample of the output data (first 5 rows):")
+    print(all_customer_combined_df.head())
+except Exception as e:
+    print(f"ERROR: Could not save the Excel file '{output_filename}'. {e}")
+    print(traceback.format_exc())
+print("\nRFM Script Execution Finished.")
