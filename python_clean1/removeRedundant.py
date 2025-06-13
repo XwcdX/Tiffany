@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 # --- 1. Load Data from Excel File ---
-file_path = 'has_address_valid_district2.xlsx' # Make sure this file is in the same directory or provide the full path
+file_path = 'has_address_valid_district2.xlsx'
 try:
     df = pd.read_excel(file_path)
     print("Successfully loaded the Excel file.")

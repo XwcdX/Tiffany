@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 import numpy as np
 import traceback
 
-# --- RFM Segmentation Logic (as provided) ---
 rfm_logic_data = {
     'R': ['High', 'High', 'High', 'High', 'High', 'High', 'High', 'High', 'High',
           'Medium', 'Medium', 'Medium', 'Medium', 'Medium', 'Medium', 'Medium', 'Medium', 'Medium',
@@ -22,9 +21,7 @@ rfm_logic_data = {
                        'Hibernating', 'Hibernating', 'Cant lose them', 'Hibernating', 'Lost']
 }
 rfm_segment_map_df = pd.DataFrame(rfm_logic_data)
-# -----------------------------------------
 
-# --- Helper Functions ---
 def normalize_name(s):
     if pd.isna(s):
         return ''
@@ -36,21 +33,17 @@ def robust_rfm_date_parser(date_column_series, df_name_for_debug="transactions_d
     Prints debug info to console.
     """
     print(f"\n--- Debug: Date Parsing for {df_name_for_debug} ---")
-    original_dates_copy = date_column_series.copy() # Keep original for comparison
+    original_dates_copy = date_column_series.copy()
     print(f"Original 'Date' column sample (first 5 from Excel in {df_name_for_debug}):", original_dates_copy.head().tolist())
     print(f"Original 'Date' column dtype from Excel in {df_name_for_debug}:", original_dates_copy.dtype)
 
-    # --- CRITICAL STEP: Convert ALL to string FIRST to neutralize Excel's pre-parsing ---
     print("Converting entire 'Date' column to string before parsing...")
     date_series_as_strings = original_dates_copy.astype(str)
-    # print("Sample after astype(str):", date_series_as_strings.head().tolist()) # Can be verbose
 
-    # Attempt 1: Parse string dates with dayfirst=True
     print("Attempting `pd.to_datetime` with `dayfirst=True` on string-converted dates...")
     parsed_dates = pd.to_datetime(date_series_as_strings, dayfirst=True, errors='coerce')
     print(f"After `dayfirst=True`: {parsed_dates.count()} valid dates, {parsed_dates.isnull().sum()} NaT.")
 
-    # Attempt 2: If dayfirst=True left NaTs, try specific D/M/Y formats on those remaining NaTs
     remaining_nat_mask_after_dayfirst = parsed_dates.isnull()
     if remaining_nat_mask_after_dayfirst.any():
         print(f"Found {remaining_nat_mask_after_dayfirst.sum()} NaTs after `dayfirst=True`. Trying specific formats for these...")
@@ -78,7 +71,6 @@ def robust_rfm_date_parser(date_column_series, df_name_for_debug="transactions_d
     print(f"--- End Date Parsing for {df_name_for_debug} ---")
     return parsed_dates
 
-# --- Loading Data Files ---
 print("Loading data files...")
 try:
     mapped_df = pd.read_excel("mapped_treatments.xlsx")
@@ -92,7 +84,6 @@ except Exception as e:
     print(traceback.format_exc())
     exit()
 
-# --- Data Preprocessing ---
 print("\nNormalizing names...")
 if 'NAMA CUSTOMER' not in mapped_df.columns:
     print("ERROR: 'NAMA CUSTOMER' column not found in mapped_treatments.xlsx")
@@ -104,7 +95,6 @@ if 'Name' not in members_df.columns:
     exit()
 members_df['member_norm'] = members_df['Name'].apply(normalize_name)
 
-# --- Date Column Processing for RFM ---
 DATE_COLUMN_NAME = 'Date'
 if DATE_COLUMN_NAME not in mapped_df.columns:
     print(f"ERROR: Date column '{DATE_COLUMN_NAME}' not found in mapped_treatments.xlsx.")
@@ -122,7 +112,6 @@ if mapped_df[DATE_COLUMN_NAME].isnull().any():
         exit()
     print(f"{nat_count_before_drop} rows with NaT dates dropped. Remaining rows: {len(mapped_df)}")
 
-# --- CRITICAL DATE DIAGNOSTICS FOR RFM ---
 print("\n--- Date Diagnostics for RFM After Parsing & NaT Drop ---")
 min_date_for_rfm = pd.NaT
 max_date_for_rfm = pd.NaT
@@ -154,7 +143,6 @@ else:
 print("--- End Date Diagnostics for RFM ---")
 
 
-# --- Price Column Processing ---
 PRICE_COLUMN_NAME = 'Total_Price'
 if PRICE_COLUMN_NAME not in mapped_df.columns:
     print(f"WARNING: Price column '{PRICE_COLUMN_NAME}' not found. Using placeholder value 0 for calculations.")
@@ -162,7 +150,6 @@ if PRICE_COLUMN_NAME not in mapped_df.columns:
 mapped_df[PRICE_COLUMN_NAME] = pd.to_numeric(mapped_df[PRICE_COLUMN_NAME], errors='coerce').fillna(0)
 
 
-# --- RFM Calculation ---
 CUSTOMER_NAME_COLUMN = 'NAMA CUSTOMER'
 TREATMENT_COLUMN_NAME = 'NAMA TREATMENT'
 
@@ -186,7 +173,7 @@ if not recency_df.empty:
     EXPECTED_MAX_POSSIBLE_RECENCY = (max_date_for_rfm - min_date_for_rfm).days + 1
     print(f"Max calculated recency (before FillNA): {max_calculated_recency}")
     print(f"Expected max possible recency based on data span: {EXPECTED_MAX_POSSIBLE_RECENCY}")
-    if max_calculated_recency > EXPECTED_MAX_POSSIBLE_RECENCY + 30: # Allow some buffer
+    if max_calculated_recency > EXPECTED_MAX_POSSIBLE_RECENCY + 30:
         print(f"WARNING: Max calculated recency {max_calculated_recency} seems too high for data span!")
         print("Top 5 largest recencies:")
         print(recency_df.nlargest(5, 'Recency_Days'))
@@ -194,7 +181,7 @@ if not recency_df.empty:
 rfm_df = monetary_df.merge(frequency_df, on='customer_norm', how='left')
 rfm_df = rfm_df.merge(recency_df, on='customer_norm', how='left')
 
-rfm_df['Frequency'] = rfm_df['Frequency'].fillna(0).astype(int) # Ensure Frequency is int
+rfm_df['Frequency'] = rfm_df['Frequency'].fillna(0).astype(int)
 rfm_df['MonetaryValue'] = rfm_df['MonetaryValue'].fillna(0)
 
 if 'Recency_Days' in rfm_df.columns:
@@ -205,18 +192,15 @@ if 'Recency_Days' in rfm_df.columns:
         rfm_df['Recency_Days'].fillna(EXPECTED_MAX_POSSIBLE_RECENCY, inplace=True)
 else:
     rfm_df['Recency_Days'] = EXPECTED_MAX_POSSIBLE_RECENCY
-rfm_df['Recency_Days'] = rfm_df['Recency_Days'].astype(int) # Ensure Recency is int
+rfm_df['Recency_Days'] = rfm_df['Recency_Days'].astype(int)
 
 print(f"Final Max Recency in rfm_df after fillna: {rfm_df['Recency_Days'].max()}")
 
-# --- RFM Score Calculations (R, F, M) ---
-# (Using the robust scoring logic from your last complete script version)
 r_labels = ['High', 'Medium', 'Low']
 f_labels = ['Low', 'Medium', 'High']
 m_labels = ['Low', 'Medium', 'High']
 score_bins = 3
 
-# R_Score
 if not rfm_df.empty and 'Recency_Days' in rfm_df.columns and rfm_df['Recency_Days'].nunique() > 1:
     try:
         rfm_df['R_Score'] = pd.qcut(rfm_df['Recency_Days'], q=score_bins, labels=r_labels, duplicates='drop')
@@ -237,7 +221,6 @@ if not rfm_df.empty and 'Recency_Days' in rfm_df.columns and rfm_df['Recency_Day
 elif not rfm_df.empty:
     rfm_df['R_Score'] = r_labels[1]
 
-# M_Score
 if not rfm_df.empty and 'MonetaryValue' in rfm_df.columns and rfm_df['MonetaryValue'].nunique() > 1:
     try:
         rfm_df['M_Score'] = pd.qcut(rfm_df['MonetaryValue'].rank(method='first'), q=score_bins, labels=m_labels, duplicates='drop')
@@ -257,11 +240,10 @@ if not rfm_df.empty and 'MonetaryValue' in rfm_df.columns and rfm_df['MonetaryVa
 elif not rfm_df.empty:
     rfm_df['M_Score'] = m_labels[1]
 
-# F_Score (Fairness Logic)
 print("Calculating F_Score with 'fairness' logic...")
 f_score_map = {}
 if not rfm_df.empty and 'Frequency' in rfm_df.columns:
-    rfm_df['Frequency'] = rfm_df['Frequency'].astype(int) # Ensure int
+    rfm_df['Frequency'] = rfm_df['Frequency'].astype(int)
     unique_f_values = sorted(rfm_df['Frequency'].unique())
     if not unique_f_values:
         rfm_df['F_Score'] = f_labels[1]
@@ -282,13 +264,12 @@ if not rfm_df.empty and 'Frequency' in rfm_df.columns:
                 assigned_labels.append(f_labels[label_idx])
             f_score_map = dict(zip(unique_f_values, assigned_labels))
     if f_score_map: rfm_df['F_Score'] = rfm_df['Frequency'].map(f_score_map)
-    if 'F_Score' not in rfm_df.columns and not rfm_df.empty : rfm_df['F_Score'] = f_labels[1] # Default if not created
-    if 'F_Score' in rfm_df.columns: rfm_df['F_Score'].fillna(f_labels[1], inplace=True) # Fill any NaNs
+    if 'F_Score' not in rfm_df.columns and not rfm_df.empty : rfm_df['F_Score'] = f_labels[1]
+    if 'F_Score' in rfm_df.columns: rfm_df['F_Score'].fillna(f_labels[1], inplace=True)
 elif not rfm_df.empty:
     rfm_df['F_Score'] = f_labels[1]
 
 
-# Merge with RFM Segmentation Logic
 if not rfm_df.empty and all(col in rfm_df.columns for col in ['R_Score', 'F_Score', 'M_Score']):
     rfm_df = rfm_df.merge(rfm_segment_map_df, left_on=['R_Score', 'F_Score', 'M_Score'], right_on=['R', 'F', 'M'], how='left')
     rfm_df.rename(columns={'Classification': 'RFM_Classification'}, inplace=True)
@@ -300,9 +281,8 @@ else:
 print("RFM metrics and classification calculated.")
 
 
-# --- Creating Base Customer DataFrame ---
 print("\nCreating base customer DataFrame...")
-all_customer_base_df = pd.DataFrame() # Initialize
+all_customer_base_df = pd.DataFrame()
 if not mapped_df.empty and 'customer_norm' in mapped_df.columns and CUSTOMER_NAME_COLUMN in mapped_df.columns:
     unique_customers = pd.DataFrame(mapped_df['customer_norm'].unique(), columns=['customer_norm'])
     if not unique_customers.empty:
@@ -311,7 +291,6 @@ if not mapped_df.empty and 'customer_norm' in mapped_df.columns and CUSTOMER_NAM
 else:
     print("Warning: mapped_df is empty or missing key columns for base_df creation.")
 
-# Merge Total_Spent
 if not rfm_df.empty and 'MonetaryValue' in rfm_df.columns and 'customer_norm' in rfm_df.columns:
     all_customer_base_df = all_customer_base_df.merge(rfm_df[['customer_norm', 'MonetaryValue']], on='customer_norm', how='left')
     if 'MonetaryValue' in all_customer_base_df.columns:
@@ -319,7 +298,6 @@ if not rfm_df.empty and 'MonetaryValue' in rfm_df.columns and 'customer_norm' in
 if 'Total_Spent' not in all_customer_base_df.columns: all_customer_base_df['Total_Spent'] = 0.0
 all_customer_base_df['Total_Spent'] = all_customer_base_df['Total_Spent'].fillna(0.0)
 
-# Add Status
 if not members_df.empty and 'member_norm' in members_df.columns and 'customer_norm' in all_customer_base_df.columns:
     all_customer_base_df['Status'] = all_customer_base_df['customer_norm'].isin(members_df['member_norm'])
     all_customer_base_df['Status'] = all_customer_base_df['Status'].map({True: 'Member', False: 'Non-Member'})
@@ -327,8 +305,6 @@ else:
     all_customer_base_df['Status'] = 'Unknown'
 print("Base customer DataFrame created.")
 
-
-# --- Treatment Summary & Total Items ---
 all_customers_treatment_summary_str_df = pd.DataFrame(columns=['customer_norm', 'Treatment Summary'])
 total_items_df = pd.DataFrame(columns=['customer_norm', 'Total_Items_Purchased'])
 if TREATMENT_COLUMN_NAME in mapped_df.columns and not mapped_df.empty:
@@ -344,7 +320,6 @@ if TREATMENT_COLUMN_NAME in mapped_df.columns and not mapped_df.empty:
 else:
     print(f"Warning: '{TREATMENT_COLUMN_NAME}' column not found or mapped_df empty. Summaries will be empty.")
 
-# --- Combine All Information ---
 print("\nCombining all data for the final report...")
 all_customer_combined_df = all_customer_base_df.copy()
 
@@ -358,14 +333,12 @@ if not total_items_df.empty:
 if 'Total_Items_Purchased' not in all_customer_combined_df.columns: all_customer_combined_df['Total_Items_Purchased'] = 0
 all_customer_combined_df['Total_Items_Purchased'] = all_customer_combined_df['Total_Items_Purchased'].fillna(0).astype(int)
 
-# Merge RFM data
 rfm_cols_to_merge = ['customer_norm', 'Recency_Days', 'Frequency', 'R_Score', 'F_Score', 'M_Score', 'RFM_Classification']
 if not rfm_df.empty and 'customer_norm' in rfm_df.columns:
     rfm_cols_present = [col for col in rfm_cols_to_merge if col in rfm_df.columns]
-    if 'customer_norm' in rfm_cols_present: # Must have customer_norm
+    if 'customer_norm' in rfm_cols_present:
         all_customer_combined_df = pd.merge(all_customer_combined_df, rfm_df[rfm_cols_present], on='customer_norm', how='left')
 
-# Ensure all RFM columns exist and fill NaNs
 for col in ['Recency_Days', 'Frequency']:
     if col not in all_customer_combined_df.columns: all_customer_combined_df[col] = 0
     all_customer_combined_df[col] = all_customer_combined_df[col].fillna(0).astype(int)
@@ -373,7 +346,6 @@ for col in ['R_Score', 'F_Score', 'M_Score', 'RFM_Classification']:
     if col not in all_customer_combined_df.columns: all_customer_combined_df[col] = 'Undefined'
     all_customer_combined_df[col] = all_customer_combined_df[col].fillna('Undefined')
 
-# --- Final Output DataFrame ---
 final_columns_ordered = [
     'NAMA CUSTOMER', 'Total_Spent', 'Status',
     'Recency_Days', 'Frequency', 'Total_Items_Purchased',
@@ -381,7 +353,7 @@ final_columns_ordered = [
     'RFM_Classification',
     'Treatment Summary'
 ]
-for col_name in final_columns_ordered: # Ensure all final columns exist
+for col_name in final_columns_ordered:
     if col_name not in all_customer_combined_df.columns:
         if col_name in ['Total_Spent', 'Recency_Days', 'Frequency', 'Total_Items_Purchased']: all_customer_combined_df[col_name] = 0
         elif col_name in ['Status', 'R_Score', 'F_Score', 'M_Score', 'RFM_Classification']: all_customer_combined_df[col_name] = 'Undefined'
@@ -397,19 +369,15 @@ f_labels = ['Low', 'Medium', 'High']
 f_score_map = {}
 
 if not unique_f_values:
-    # no rows at all
     pass
 elif len(unique_f_values) == 1:
-    # only one distinct frequency → label it 'Low'
     f_score_map = { unique_f_values[0]: f_labels[0] }
 elif len(unique_f_values) == 2:
-    # two distinct frequencies → map smallest→Low, largest→Medium
     f_score_map = {
         unique_f_values[0]: f_labels[0],
         unique_f_values[1]: f_labels[1]
     }
 else:
-    # three or more distinct frequencies → try qcut on the unique values
     try:
         binned = pd.qcut(
             pd.Series(unique_f_values),
@@ -417,13 +385,11 @@ else:
             labels=f_labels,
             duplicates='drop'
         )
-        # pd.qcut returns a Categorical indexed by 0..(n_unique-1)
         f_score_map = {
             freq_val: binned.iloc[i]
             for i, freq_val in enumerate(unique_f_values)
         }
     except ValueError:
-        # fallback: evenly assign labels across sorted unique_f_values
         n_unique = len(unique_f_values)
         assigned = []
         for i in range(n_unique):

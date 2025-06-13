@@ -12,9 +12,13 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 import numpy as np
 from statsmodels.tsa.seasonal import seasonal_decompose
 import traceback
+from collections import Counter
+from itertools import combinations
 
 # --- Page Configuration ---
 st.set_page_config(layout="wide", page_title="Customer Analytics Dashboard")
+
+TREATMENT_COLUMN_NAME = 'NAMA TREATMENT'
 
 @st.cache_data
 def load_data():
@@ -178,7 +182,8 @@ st.header("1. Descriptive & Diagnostic Analytics")
 descriptive_tabs = st.tabs([
     "📊 RFM Segmentation Overview",
     "🔄 Cohort Analysis & Retention",
-    "📈 Time-Series Analysis"
+    "📈 Time-Series Analysis",
+    "🛍️ Product & Treatment Analysis"
 ])
 
 with descriptive_tabs[0]:
@@ -351,7 +356,148 @@ with descriptive_tabs[2]:
             st.warning("Not enough data points (months) for meaningful seasonality decomposition.")
     else:
         st.warning("Monthly revenue data not available or invalid for seasonality decomposition.")
+        
+with descriptive_tabs[3]: 
+    st.subheader("Product & Treatment Deep-Dive")
+    
+    if TREATMENT_COLUMN_NAME not in transactions_df.columns:
+        st.error(f"Critical Error: The specified treatment column '{TREATMENT_COLUMN_NAME}' was not found in the transaction data.")
+        st.info("Please update the `TREATMENT_COLUMN_NAME` variable at the top of the script to match your data file.")
+    else:
+        st.markdown("---")
+        st.subheader("Top Overall Treatments")
+        top_n_overall = st.slider("Select number of top treatments to display:", 5, 50, 10, key="top_n_overall")
+        
+        treatment_counts = transactions_df[TREATMENT_COLUMN_NAME].value_counts().reset_index()
+        treatment_counts.columns = [TREATMENT_COLUMN_NAME, 'Number of Times Sold']
+        
+        fig_top_treatments = px.bar(
+            treatment_counts.head(top_n_overall),
+            x='Number of Times Sold',
+            y=TREATMENT_COLUMN_NAME,
+            orientation='h',
+            title=f"Top {top_n_overall} Most Popular Treatments",
+            labels={TREATMENT_COLUMN_NAME: "Treatment"}
+        ).update_layout(yaxis={'categoryorder':'total ascending'})
+        st.plotly_chart(fig_top_treatments, use_container_width=True)
+        
+        st.markdown("---")
+        st.subheader("Top Treatments by RFM Segment")
+        if rfm_summary_df.empty or 'RFM_Classification' not in rfm_summary_df.columns:
+            st.warning("Cannot perform analysis by RFM segment because RFM summary data is unavailable.")
+        else:
+            merged_df = pd.merge(
+                transactions_df,
+                rfm_summary_df[['NAMA CUSTOMER', 'RFM_Classification']],
+                on='NAMA CUSTOMER',
+                how='left'
+            ).dropna(subset=['RFM_Classification'])
+            
+            if merged_df.empty:
+                st.warning("No transactions could be mapped to an RFM segment.")
+            else:
+                available_segments = sorted(merged_df['RFM_Classification'].unique())
+                selected_segment = st.selectbox("Choose an RFM Segment to analyze:", available_segments)
+                
+                segment_df = merged_df[merged_df['RFM_Classification'] == selected_segment]
+                
+                if segment_df.empty:
+                    st.info(f"No treatment data available for the '{selected_segment}' segment.")
+                else:
+                    segment_treatment_counts = segment_df[TREATMENT_COLUMN_NAME].value_counts().reset_index().head(10)
+                    segment_treatment_counts.columns = [TREATMENT_COLUMN_NAME, 'Number of Times Sold']
+                    
+                    fig_segment_treatments = px.bar(
+                        segment_treatment_counts,
+                        x='Number of Times Sold',
+                        y=TREATMENT_COLUMN_NAME,
+                        orientation='h',
+                        title=f"Top 10 Treatments for '{selected_segment}' Customers"
+                    ).update_layout(yaxis={'categoryorder':'total ascending'})
+                    st.plotly_chart(fig_segment_treatments, use_container_width=True)
 
+        st.markdown("---")
+        st.subheader("Customer Value by Treatment")
+        st.info(
+            "This chart shows the **average historical total spend of customers who have purchased a specific treatment**. "
+            "It helps identify which treatments attract high-value customers."
+        )
+        if rfm_summary_df.empty or 'Total_Spent' not in rfm_summary_df.columns:
+            st.warning("Cannot perform this analysis because customer `Total_Spent` data is unavailable in the RFM summary file.")
+        else:
+            customer_treatment_pairs = transactions_df[['NAMA CUSTOMER', TREATMENT_COLUMN_NAME]].drop_duplicates()
+            merged_spend_df = pd.merge(
+                customer_treatment_pairs,
+                rfm_summary_df[['NAMA CUSTOMER', 'Total_Spent']],
+                on='NAMA CUSTOMER',
+                how='left'
+            ).dropna(subset=['Total_Spent'])
+            
+            avg_spend_per_treatment = merged_spend_df.groupby(TREATMENT_COLUMN_NAME)['Total_Spent'].mean().reset_index()
+            avg_spend_per_treatment.columns = [TREATMENT_COLUMN_NAME, 'Average Customer Total Spend']
+
+            top_n_spend = st.slider("Select number of treatments to show by customer value:", 5, 50, 15, key="top_n_spend")
+
+            fig_avg_spend = px.bar(
+                avg_spend_per_treatment.sort_values('Average Customer Total Spend', ascending=False).head(top_n_spend),
+                x='Average Customer Total Spend',
+                y=TREATMENT_COLUMN_NAME,
+                orientation='h',
+                title=f"Top {top_n_spend} Treatments by Average Value of Customers Who Bought Them"
+            ).update_layout(yaxis={'categoryorder':'total ascending'})
+            st.plotly_chart(fig_avg_spend, use_container_width=True)
+            
+            st.markdown("---")
+            st.subheader("Which Treatments Are Bought Together? (Co-occurrence)")
+            st.markdown("This heatmap shows which pairs of treatments are most frequently purchased **in the same transaction on the same day**. Darker squares mean a stronger association.")
+            grouping_cols = ['NAMA CUSTOMER', 'Date']
+            if 'NO. TF' in transactions_df.columns:
+                grouping_cols.append('NO. TF')
+                st.info("Grouping by Customer, Date, and Transaction Number (`NO. TF`) for highest accuracy.")
+            else:
+                st.info("Grouping by Customer and Date. Add a 'NO. TF' column for more precise transaction analysis.")
+
+            with st.spinner("Calculating treatment pairs... This can take a moment for large datasets."):
+                treatments_by_transaction = transactions_df.groupby(grouping_cols)[TREATMENT_COLUMN_NAME].apply(list)
+                
+                treatments_by_transaction = treatments_by_transaction[treatments_by_transaction.str.len() > 1]
+                
+                if treatments_by_transaction.empty:
+                    st.info("No single transaction contains more than one type of treatment. Cannot calculate co-occurrence.")
+                else:
+                    pairs = Counter()
+                    for transaction_items in treatments_by_transaction:
+                        for pair in combinations(sorted(set(transaction_items)), 2):
+                            pairs[pair] += 1
+                    
+                    if not pairs:
+                        st.info("Could not generate any treatment pairs from transactions.")
+                    else:
+                        top_n_pairs = st.slider("Number of top co-occurring pairs to visualize:", 10, 100, 25, key="top_n_pairs")
+                        
+                        co_occurrence_df = pd.DataFrame(pairs.most_common(top_n_pairs), columns=['Pair', 'Count'])
+                        if not co_occurrence_df.empty:
+                            co_occurrence_df[['Treatment 1', 'Treatment 2']] = pd.DataFrame(co_occurrence_df['Pair'].tolist(), index=co_occurrence_df.index)
+                            
+                            fig_heatmap = go.Figure(data=go.Heatmap(
+                                z=co_occurrence_df['Count'],
+                                x=co_occurrence_df['Treatment 1'],
+                                y=co_occurrence_df['Treatment 2'],
+                                colorscale='Viridis',
+                                hoverongaps=False,
+                                hovertemplate='Treatment 1: %{x}<br>Treatment 2: %{y}<br>Bought Together: %{z} times<extra></extra>'
+                            ))
+                            
+                            fig_heatmap.update_layout(
+                                title=f"Top {top_n_pairs} Co-occurring Treatment Pairs (in single transactions)",
+                                xaxis_title="Treatment",
+                                yaxis_title="Treatment",
+                                xaxis_showgrid=False, yaxis_showgrid=False,
+                                height=600
+                            )
+                            st.plotly_chart(fig_heatmap, use_container_width=True)
+                        else:
+                            st.info("No pairs found after processing.")
 
 st.header("2. Predictive Analytics")
 predictive_tabs = st.tabs([

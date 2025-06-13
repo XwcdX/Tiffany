@@ -16,7 +16,6 @@ def load_data():
     try:
         df_member = pd.read_excel("member_spending.xlsx")
         df_all = pd.read_excel("all_customer_combined_final.xlsx")
-        # df_treat = pd.read_excel("member_treatment_summary.xlsx")
         return df_member, df_all #, df_treat
     except FileNotFoundError as e:
         st.error(f"Error loading data: {e}. Please ensure 'member_spending.xlsx' and 'all_customer_combined_info.xlsx' are in the same directory.")
