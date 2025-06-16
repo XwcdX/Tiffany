@@ -1,11 +1,11 @@
 import pandas as pd
 
-input_file  = '2025SALES.xlsx'
-output_file = 'merged_2025_transactions.xlsx'
+input_file  = '2024SALES.xlsx'
+output_file = 'merged_2024_transactions.xlsx'
 
 xls = pd.ExcelFile(input_file)
 
-sheet_names = [s for s in xls.sheet_names if s.strip().endswith('25')]
+sheet_names = [s for s in xls.sheet_names if s.strip().endswith('24')]
 
 df_list = []
 for sheet in sheet_names:

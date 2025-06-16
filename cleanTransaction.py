@@ -31,10 +31,6 @@ Month_map = {
 }
 
 def expand_Month(val):
-    """
-    Extracts an alphabetic Month part and optional 2-digit year,
-    maps the Month part, and recombines.
-    """
     m = re.match(r'^([a-z]+)\s*(\d{2})?$', val)
     if not m:
         return val

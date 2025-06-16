@@ -24,60 +24,69 @@ TREATMENT_COLUMN_NAME = 'NAMA TREATMENT'
 def load_data():
     try:
         transactions_df = pd.read_excel("mapped_treatments.xlsx")
-        rfm_summary_df = pd.read_excel("all_customer_combined_info_RFM_corrected_full.xlsx")
+        rfm_summary_df = pd.read_excel("updated_RFM_with_classification.xlsx")
     except FileNotFoundError as e:
         st.error(f"ERROR: Could not load data files. {e}")
         return pd.DataFrame(), pd.DataFrame()
 
     if not transactions_df.empty and 'Date' in transactions_df.columns:
         st.markdown("---")
-        st.subheader("Debug: Date Parsing in `load_data()`")
+        st.subheader("Debug: Multi-Step Date Parsing")
 
         original_dates_copy = transactions_df['Date'].copy()
-
         st.write("Original 'Date' column sample (first 5 from Excel):", original_dates_copy.head().tolist())
         st.write("Original 'Date' column dtype from Excel:", original_dates_copy.dtype)
 
-        st.write("Converting entire 'Date' column to string before parsing...")
         date_series_as_strings = original_dates_copy.astype(str)
-        st.write("Sample after astype(str):", date_series_as_strings.head().tolist())
+        st.write("Sample after converting to string:", date_series_as_strings.head().tolist())
+        st.markdown("---")
 
-        st.write("Attempting `pd.to_datetime` with `dayfirst=True` on string-converted dates...")
-        parsed_dates = pd.to_datetime(date_series_as_strings, dayfirst=True, errors='coerce')
-        st.write(f"After `dayfirst=True`: {parsed_dates.count()} valid dates, {parsed_dates.isnull().sum()} NaT.")
-        st.write("Sample of parsed dates after `dayfirst=True`:", parsed_dates.dropna().head().tolist())
+        # --- Step 1: Try standard parsing first (Handles YYYY-MM-DD correctly) ---
+        st.write("➡️ **Step 1: Attempting standard `pd.to_datetime` (for YYYY-MM-DD formats)...**")
+        parsed_dates = pd.to_datetime(date_series_as_strings, errors='coerce')
+        st.write(f"After Step 1: **{parsed_dates.count()}** valid dates, **{parsed_dates.isnull().sum()}** failed (now NaT).")
+        st.write("Sample of dates parsed correctly in Step 1:", parsed_dates.dropna().head().tolist())
 
-        remaining_nat_mask_after_dayfirst = parsed_dates.isnull()
-        if remaining_nat_mask_after_dayfirst.any():
-            st.write(f"Found {remaining_nat_mask_after_dayfirst.sum()} NaTs after `dayfirst=True`. Trying specific formats for these...")
+        # --- Step 2: For failures, try again with dayfirst=True ---
+        remaining_nat_mask = parsed_dates.isnull()
+        if remaining_nat_mask.any():
+            st.markdown("---")
+            st.write(f"➡️ **Step 2: Retrying the {remaining_nat_mask.sum()} failed dates with `dayfirst=True` (for DD/MM/YYYY formats)...**")
             
-            strings_for_specific_formats = date_series_as_strings[remaining_nat_mask_after_dayfirst]
+            # Isolate the strings that failed in Step 1
+            strings_for_dayfirst = date_series_as_strings[remaining_nat_mask]
             
-            formats_to_try_for_strings = [
-                '%d/%m/%Y',
-                '%d/%m/%y',
-                # '%Y-%m-%d %H:%M:%S',
-                # '%Y-%m-%d',
-            ]
-            
-            reparsed_from_specific_formats = pd.Series([pd.NaT] * len(strings_for_specific_formats), 
-                                                       index=strings_for_specific_formats.index, 
-                                                       dtype='datetime64[ns]')
+            # Attempt to parse them with dayfirst=True
+            reparsed_dayfirst = pd.to_datetime(strings_for_dayfirst, dayfirst=True, errors='coerce')
 
-            for fmt in formats_to_try_for_strings:
-                if reparsed_from_specific_formats.isnull().any():
-                    current_nat_in_batch_mask = reparsed_from_specific_formats.isnull()
-                    temp_reparsed = pd.to_datetime(strings_for_specific_formats[current_nat_in_batch_mask], 
-                                                   format=fmt, errors='coerce')
-                    reparsed_from_specific_formats = reparsed_from_specific_formats.fillna(temp_reparsed)
-                    st.write(f"Using format '{fmt}' on remaining strings: {reparsed_from_specific_formats.count()} of this batch now parsed.")
+            # Fill the NaNs in our main series with the results of this second attempt
+            parsed_dates.fillna(reparsed_dayfirst, inplace=True)
             
-            parsed_dates = parsed_dates.fillna(reparsed_from_specific_formats)
-            st.write(f"After trying specific D/M/Y formats: {parsed_dates.count()} total valid dates, {parsed_dates.isnull().sum()} remain NaT.")
+            st.write(f"After Step 2: **{parsed_dates.count()}** total valid dates, **{parsed_dates.isnull().sum()}** still remain NaT.")
+            st.write("Sample of dates newly parsed in Step 2:", reparsed_dayfirst.dropna().head().tolist())
+
+        # --- Step 3: Use specific formats as a final fallback ---
+        remaining_nat_mask_step2 = parsed_dates.isnull()
+        if remaining_nat_mask_step2.any():
+            st.markdown("---")
+            st.write(f"➡️ **Step 3: Found {remaining_nat_mask_step2.sum()} remaining NaTs. Trying specific formats as a final fallback...**")
+            
+            strings_for_specific_formats = date_series_as_strings[remaining_nat_mask_step2]
+            formats_to_try = ['%d/%m/%Y', '%d/%m/%y']
+            
+            for fmt in formats_to_try:
+                # Only try to parse dates that are still NaT
+                current_nat_mask = parsed_dates.isnull()
+                if not current_nat_mask.any():
+                    break # All dates have been parsed, no need to continue
+                
+                temp_reparsed = pd.to_datetime(date_series_as_strings[current_nat_mask], format=fmt, errors='coerce')
+                parsed_dates.fillna(temp_reparsed, inplace=True)
+                st.write(f"Using format '{fmt}': **{parsed_dates.count()}** total valid dates, **{parsed_dates.isnull().sum()}** remain NaT.")
 
         transactions_df['Date'] = parsed_dates
         
-        # --- Final NaT Handling & Year Check ---
+        # --- Final NaT Handling & Year Check (Your existing code, now operating on correct data) ---
         if transactions_df['Date'].isnull().any():
             num_nat_final = transactions_df['Date'].isnull().sum()
             st.warning(f"After all attempts, {num_nat_final} dates remain NaT and will be dropped.")
@@ -92,6 +101,7 @@ def load_data():
         else:
             st.success("All date entries processed successfully (no NaTs remaining).")
 
+        # --- The rest of your function remains the same ---
         st.markdown("---")
         st.subheader("Debug: Final Processed Date Column Statistics")
         if not transactions_df.empty:
@@ -100,13 +110,13 @@ def load_data():
             max_date_final = transactions_df['Date'].max()
             st.write(f"Min Date in final DataFrame: {min_date_final}")
             st.write(f"Max Date in final DataFrame: {max_date_final}")
+            # ... (the rest of your year checks will now work correctly)
             if pd.notna(min_date_final):
                 year_counts = transactions_df['Date'].dt.year.value_counts().sort_index()
                 st.write("Value counts of years in final 'Date' column:")
                 st.dataframe(year_counts)
                 
-                # Explicitly check for dates beyond your known data range
-                EXPECTED_MAX_DATE = pd.to_datetime("2025-04-30")
+                EXPECTED_MAX_DATE = pd.to_datetime("2025-05-31")
                 if max_date_final > EXPECTED_MAX_DATE:
                     st.error(f"WARNING: Max date found ({max_date_final}) is BEYOND your expected max data date ({EXPECTED_MAX_DATE}). Showing problematic original rows:")
                     problem_rows_max = transactions_df[transactions_df['Date'] > EXPECTED_MAX_DATE]
@@ -116,7 +126,6 @@ def load_data():
                         'Parsed_As_This_Date': problem_rows_max['Date']
                     }).head(50))
                 
-                # Also check for very old dates again
                 RECENT_YEAR_THRESHOLD = 2023
                 if min_date_final.year < RECENT_YEAR_THRESHOLD:
                     st.error(f"WARNING: Minimum date year {min_date_final.year} is before threshold {RECENT_YEAR_THRESHOLD}. Showing problematic original rows:")

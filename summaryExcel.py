@@ -27,48 +27,60 @@ def normalize_name(s):
         return ''
     return str(s).strip().lower()
 
-def robust_rfm_date_parser(date_column_series, df_name_for_debug="transactions_df"):
-    """
-    Robust date parser adapted for a non-Streamlit script.
-    Prints debug info to console.
-    """
-    print(f"\n--- Debug: Date Parsing for {df_name_for_debug} ---")
-    original_dates_copy = date_column_series.copy()
-    print(f"Original 'Date' column sample (first 5 from Excel in {df_name_for_debug}):", original_dates_copy.head().tolist())
-    print(f"Original 'Date' column dtype from Excel in {df_name_for_debug}:", original_dates_copy.dtype)
+def robust_date_parser(date_series, df_name_for_debug="DataFrame"):
+    print(f"\n--- Debug: Starting Multi-Step Date Parsing for '{df_name_for_debug}' ---")
 
-    print("Converting entire 'Date' column to string before parsing...")
+    original_dates_copy = date_series.copy()
+    print("Original 'Date' column sample (first 5):", original_dates_copy.head().tolist())
+    print("Original 'Date' column dtype:", original_dates_copy.dtype)
+
     date_series_as_strings = original_dates_copy.astype(str)
+    print("Sample after converting to string:", date_series_as_strings.head().tolist())
+    print("-" * 20)
 
-    print("Attempting `pd.to_datetime` with `dayfirst=True` on string-converted dates...")
-    parsed_dates = pd.to_datetime(date_series_as_strings, dayfirst=True, errors='coerce')
-    print(f"After `dayfirst=True`: {parsed_dates.count()} valid dates, {parsed_dates.isnull().sum()} NaT.")
+    print("➡️ Step 1: Attempting standard `pd.to_datetime`...")
+    parsed_dates = pd.to_datetime(date_series_as_strings, errors='coerce')
+    print(f"   After Step 1: {parsed_dates.count()} valid dates, {parsed_dates.isnull().sum()} failed (now NaT).")
 
-    remaining_nat_mask_after_dayfirst = parsed_dates.isnull()
-    if remaining_nat_mask_after_dayfirst.any():
-        print(f"Found {remaining_nat_mask_after_dayfirst.sum()} NaTs after `dayfirst=True`. Trying specific formats for these...")
-        strings_for_specific_formats = date_series_as_strings[remaining_nat_mask_after_dayfirst]
-        formats_to_try_for_strings = ['%d/%m/%Y', '%d/%m/%y']
-        reparsed_from_specific_formats = pd.Series([pd.NaT] * len(strings_for_specific_formats),
-                                                   index=strings_for_specific_formats.index,
-                                                   dtype='datetime64[ns]')
-        for fmt in formats_to_try_for_strings:
-            if reparsed_from_specific_formats.isnull().any():
-                current_nat_in_batch_mask = reparsed_from_specific_formats.isnull()
-                temp_reparsed = pd.to_datetime(strings_for_specific_formats[current_nat_in_batch_mask],
-                                               format=fmt, errors='coerce')
-                reparsed_from_specific_formats = reparsed_from_specific_formats.fillna(temp_reparsed)
-        parsed_dates = parsed_dates.fillna(reparsed_from_specific_formats)
-        print(f"After trying specific D/M/Y formats: {parsed_dates.count()} total valid dates, {parsed_dates.isnull().sum()} remain NaT.")
+    remaining_nat_mask = parsed_dates.isnull()
+    if remaining_nat_mask.any():
+        print("-" * 20)
+        print(f"➡️ Step 2: Retrying the {remaining_nat_mask.sum()} failed dates with `dayfirst=True`...")
+        
+        strings_for_dayfirst = date_series_as_strings[remaining_nat_mask]
+        
+        reparsed_dayfirst = pd.to_datetime(strings_for_dayfirst, dayfirst=True, errors='coerce')
+
+        parsed_dates.fillna(reparsed_dayfirst, inplace=True)
+        
+        print(f"   After Step 2: {parsed_dates.count()} total valid dates, {parsed_dates.isnull().sum()} still remain NaT.")
+
+    remaining_nat_mask_step2 = parsed_dates.isnull()
+    if remaining_nat_mask_step2.any():
+        print("-" * 20)
+        print(f"➡️ Step 3: Found {remaining_nat_mask_step2.sum()} remaining NaTs. Trying specific formats as a final fallback...")
+        
+        formats_to_try = ['%d/%m/%Y', '%d/%m/%y']
+        
+        for fmt in formats_to_try:
+            current_nat_mask = parsed_dates.isnull()
+            if not current_nat_mask.any():
+                print("   All dates have been parsed. Stopping format loop.")
+                break 
+            
+            temp_reparsed = pd.to_datetime(date_series_as_strings[current_nat_mask], format=fmt, errors='coerce')
+            parsed_dates.fillna(temp_reparsed, inplace=True)
+            print(f"   Using format '{fmt}': {parsed_dates.count()} total valid dates, {parsed_dates.isnull().sum()} remain NaT.")
 
     if parsed_dates.isnull().any():
-        print(f"WARNING: {parsed_dates.isnull().sum()} dates still NaT after all parsing stages.")
-        print("Sample of original values that resulted in NaT (first 10):")
-        print(original_dates_copy[parsed_dates.isnull()].head(10).tolist())
+        print("-" * 20)
+        print(f"WARNING: After all attempts, {parsed_dates.isnull().sum()} dates remain NaT.")
+        print("         Original values for rows that remained NaT (sample):")
+        print(original_dates_copy[parsed_dates.isnull()].head(10).to_string())
     else:
-        print("All date entries appear to be successfully parsed (no NaTs found after these stages).")
-    
-    print(f"--- End Date Parsing for {df_name_for_debug} ---")
+        print("\n✅ All date entries processed successfully (no NaTs remaining).")
+
+    print(f"--- End Date Parsing for '{df_name_for_debug}' ---\n")
     return parsed_dates
 
 print("Loading data files...")
@@ -101,7 +113,7 @@ if DATE_COLUMN_NAME not in mapped_df.columns:
     exit()
 
 print(f"\nProcessing date column '{DATE_COLUMN_NAME}' for RFM calculation using robust parser...")
-mapped_df[DATE_COLUMN_NAME] = robust_rfm_date_parser(mapped_df[DATE_COLUMN_NAME], "mapped_df")
+mapped_df[DATE_COLUMN_NAME] = robust_date_parser(mapped_df[DATE_COLUMN_NAME], "mapped_df")
 
 if mapped_df[DATE_COLUMN_NAME].isnull().any():
     nat_count_before_drop = mapped_df[DATE_COLUMN_NAME].isnull().sum()
@@ -130,7 +142,7 @@ if not mapped_df.empty and DATE_COLUMN_NAME in mapped_df.columns and not mapped_
     print("Value counts of years in mapped_df for RFM:")
     print(year_counts_for_rfm)
 
-    EXPECTED_MAX_DATE_RFM = pd.to_datetime("2025-04-30") 
+    EXPECTED_MAX_DATE_RFM = pd.to_datetime("2025-05-31") 
     RECENT_YEAR_THRESHOLD_RFM = 2023 
 
     if max_date_for_rfm > EXPECTED_MAX_DATE_RFM:
